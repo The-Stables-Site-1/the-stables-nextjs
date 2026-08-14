@@ -58,6 +58,14 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
     return partners.find((p) => p.slug === activeSlug)?.images[0] ?? null;
   }, [activeSlug, partners]);
 
+  const imageOrder = useMemo(
+    () =>
+      partners
+        .map((partner) => partner.images[0])
+        .filter((url): url is string => Boolean(url)),
+    [partners],
+  );
+
   if (!mounted) {
     return <Loader visible />;
   }
@@ -68,7 +76,8 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
 
       <HeroShader
         imageUrl={heroUrl}
-        visible={Boolean(activeSlug) && phase === "ready"}
+        imageOrder={imageOrder}
+        visible={phase === "ready" && Boolean(heroUrl)}
       />
 
       <div
