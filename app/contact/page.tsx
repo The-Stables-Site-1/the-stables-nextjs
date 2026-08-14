@@ -1,10 +1,15 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { CloseButton } from "@/components/CloseButton";
+import { markAppBooted } from "@/lib/boot";
 
 export default function ContactPage() {
   const [submitted, setSubmitted] = useState(false);
+
+  useEffect(() => {
+    markAppBooted();
+  }, []);
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();

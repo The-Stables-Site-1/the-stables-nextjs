@@ -23,6 +23,7 @@ body {
   background: var(--color-cream);
   color: var(--color-black);
   font-family: var(--font-sans);
+  overscroll-behavior: none;
 }
 
 body {

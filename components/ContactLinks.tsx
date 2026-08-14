@@ -2,7 +2,7 @@ import Link from "next/link";
 import { site } from "@/lib/site";
 
 type ContactLinksProps = {
-  showContent?: boolean;
+  revealedCount?: number;
   opaque?: boolean;
 };
 
@@ -14,19 +14,24 @@ const rows = [
 ] as const;
 
 export function ContactLinks({
-  showContent = true,
+  revealedCount = rows.length,
   opaque = false,
 }: ContactLinksProps) {
   return (
     <div
       className={`flex w-[335px] flex-col ${opaque ? "bg-cream" : "bg-cream"}`}
     >
-      {rows.map((row) => {
+      {rows.map((row, index) => {
         const className = `relative -mb-px flex h-10 w-full items-center border-[0.75px] border-ink bg-cream px-4 text-[12px] uppercase tracking-[0.02em] last:mb-0 ${
           row.centered ? "justify-center" : "justify-start"
         }`;
-
-        const content = showContent ? row.label : null;
+        const label = (
+          <span
+            className={index < revealedCount ? "opacity-100" : "opacity-0"}
+          >
+            {row.label}
+          </span>
+        );
 
         if ("external" in row && row.external) {
           return (
@@ -37,14 +42,14 @@ export function ContactLinks({
               rel="noopener noreferrer"
               className={className}
             >
-              {content}
+              {label}
             </a>
           );
         }
 
         return (
           <Link key={row.label} href={row.href} className={className}>
-            {content}
+            {label}
           </Link>
         );
       })}

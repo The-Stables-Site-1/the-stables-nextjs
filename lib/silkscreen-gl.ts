@@ -36,6 +36,7 @@ const FRAG = /* glsl */ `
   uniform float uHasA;
   uniform float uHasB;
   uniform float uDir;
+  uniform float uColor;
 
   varying vec2 vUv;
 
@@ -67,6 +68,14 @@ const FRAG = /* glsl */ `
     }
     float luma = dot(texture2D(tex, cuv).rgb, vec3(0.299, 0.587, 0.114));
     return clamp((luma - 0.48) * 1.55 + 0.5, 0.0, 1.0);
+  }
+
+  vec3 photo(sampler2D tex, vec2 uv, vec2 res, vec2 texSize) {
+    vec2 cuv = coverUv(uv, res, texSize);
+    if (cuv.x < 0.0 || cuv.x > 1.0 || cuv.y < 0.0 || cuv.y > 1.0) {
+      return CREAM;
+    }
+    return texture2D(tex, cuv).rgb;
   }
 
   float inkFrom(float luma, float n) {
@@ -140,12 +149,16 @@ const FRAG = /* glsl */ `
 
     float grain = (hash(gl_FragCoord.xy * 0.37) - 0.5) * 0.03;
     vec3 paper = CREAM + grain;
-    gl_FragColor = vec4(mix(paper, INK, printed), 1.0);
+    vec3 screen = mix(paper, INK, printed);
+    vec3 live = uHasA > 0.5 ? photo(uTexA, vUv, uRes, uSizeA) : CREAM;
+    float developed = step(0.001, uColor) * step(stampAt, uColor);
+    gl_FragColor = vec4(developed > 0.5 ? live : screen, 1.0);
   }
 `;
 
 export type SilkscreenEngine = {
   setTarget: (url: string | null) => void;
+  revealColor: (url: string, onDone?: () => void) => void;
   dispose: () => void;
 };
 
@@ -289,6 +302,7 @@ export function createSilkscreenEngine(
     uHasA: gl.getUniformLocation(program, "uHasA"),
     uHasB: gl.getUniformLocation(program, "uHasB"),
     uDir: gl.getUniformLocation(program, "uDir"),
+    uColor: gl.getUniformLocation(program, "uColor"),
   };
 
   const scratch = document.createElement("canvas");
@@ -329,6 +343,11 @@ export function createSilkscreenEngine(
   let resizeTimer = 0;
   let busy = false;
   let unprinting = false;
+  let revealingColor = false;
+  let colorLocked = false;
+  let colorProgress = 0;
+  let pendingReveal = false;
+  let onRevealDone: (() => void) | null = null;
   let pending: string | null | undefined;
   let prefetch: { url: string; img: HTMLImageElement } | null = null;
   let prefetchGen = 0;
@@ -368,6 +387,7 @@ export function createSilkscreenEngine(
     gl.uniform1f(loc.uHasA, hasA);
     gl.uniform1f(loc.uHasB, hasB);
     gl.uniform1f(loc.uDir, dir);
+    gl.uniform1f(loc.uColor, colorProgress);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texA ?? empty);
     gl.activeTexture(gl.TEXTURE1);
@@ -375,7 +395,32 @@ export function createSilkscreenEngine(
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   };
 
+  const finishReveal = () => {
+    colorProgress = 1;
+    revealingColor = false;
+    pendingReveal = false;
+    stopRaf();
+    paint();
+    const done = onRevealDone;
+    onRevealDone = null;
+    done?.();
+  };
+
+  const startColorReveal = () => {
+    unprinting = false;
+    pending = undefined;
+    pendingReveal = false;
+    revealingColor = true;
+    colorLocked = true;
+    setBusy(true);
+    finishReveal();
+  };
+
   const settle = () => {
+    if (revealingColor) {
+      finishReveal();
+      return;
+    }
     progress = target;
     if (unprinting) {
       unprinting = false;
@@ -423,6 +468,10 @@ export function createSilkscreenEngine(
       });
       return;
     }
+    if (pendingReveal && hasA && !texB) {
+      startColorReveal();
+      return;
+    }
     setBusy(false);
   };
 
@@ -431,8 +480,20 @@ export function createSilkscreenEngine(
     if (disposed || !pageVisible) return;
     frames += 1;
     if (frames === 1) animStarted = now;
-    const delta = target - progress;
     const timedOut = now - animStarted > MAX_ANIM_MS;
+    if (revealingColor) {
+      const delta = 1 - colorProgress;
+      if (delta <= SETTLE || frames >= MAX_ANIM_FRAMES || timedOut) {
+        settle();
+        return;
+      }
+      const step = colorProgress > 0.62 ? TAIL_STEP : PRINT_STEP;
+      colorProgress += Math.min(delta, step);
+      paint();
+      raf = requestAnimationFrame(tick);
+      return;
+    }
+    const delta = target - progress;
     if (Math.abs(delta) <= SETTLE || frames >= MAX_ANIM_FRAMES || timedOut) {
       settle();
       return;
@@ -475,7 +536,12 @@ export function createSilkscreenEngine(
       raf = 0;
       return;
     }
-    if (busy && Math.abs(target - progress) > SETTLE) {
+    if (
+      busy &&
+      (revealingColor
+        ? colorProgress < 1 - SETTLE
+        : Math.abs(target - progress) > SETTLE)
+    ) {
       raf = requestAnimationFrame(tick);
       return;
     }
@@ -557,6 +623,7 @@ export function createSilkscreenEngine(
 
   const applyTarget = (url: string | null) => {
     if (disposed) return;
+    if (colorLocked && url === null) return;
     if (url === null) {
       if (!hasA || !texA) {
         actuallyClear();
@@ -577,6 +644,10 @@ export function createSilkscreenEngine(
     }
     if (url === currentUrl && hasA && !texB) {
       paint();
+      if (pendingReveal) {
+        startColorReveal();
+        return;
+      }
       setBusy(false);
       return;
     }
@@ -606,10 +677,29 @@ export function createSilkscreenEngine(
 
   return {
     setTarget(url: string | null) {
-      if (disposed) return;
+      if (disposed || revealingColor || colorLocked) return;
       if (busy) {
         pending = url;
         prefetchTarget(url);
+        return;
+      }
+      applyTarget(url);
+    },
+    revealColor(url: string, onDone?: () => void) {
+      if (disposed) {
+        onDone?.();
+        return;
+      }
+      colorLocked = true;
+      pending = undefined;
+      onRevealDone = onDone ?? null;
+      if (currentUrl === url && hasA && !texB && !busy && !unprinting) {
+        startColorReveal();
+        return;
+      }
+      pendingReveal = true;
+      if (busy) {
+        if (currentUrl !== url) pending = url;
         return;
       }
       applyTarget(url);

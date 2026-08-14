@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { CloseButton } from "@/components/CloseButton";
+import { markAppBooted } from "@/lib/boot";
 import type { Partner } from "@/lib/partners";
 
 type PartnerExperienceProps = {
@@ -10,10 +12,22 @@ type PartnerExperienceProps = {
 };
 
 export function PartnerExperience({ partner }: PartnerExperienceProps) {
+  const [infoOpen, setInfoOpen] = useState(true);
+
+  useEffect(() => {
+    markAppBooted();
+  }, []);
+
+  useEffect(() => {
+    const onScroll = () => {
+      if (window.scrollY > 8) setInfoOpen(false);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   return (
     <div className="relative bg-cream">
-      <CloseButton />
-
       {/* Full-bleed scrolling gallery */}
       <div className="relative z-0">
         {partner.images.map((src, index) => (
@@ -21,22 +35,31 @@ export function PartnerExperience({ partner }: PartnerExperienceProps) {
             key={`${src}-${index}`}
             className="relative h-screen w-full min-h-[100svh]"
           >
-            <Image
-              src={src}
-              alt={`${partner.name} ${index + 1}`}
-              fill
-              className="object-cover"
-              sizes="100vw"
-              priority={index === 0}
-            />
+            {index === 0 ? (
+              // eslint-disable-next-line @next/next/no-img-element -- snap on after WebGL, no fade-in
+              <img
+                src={src}
+                alt={`${partner.name} 1`}
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+            ) : (
+              <Image
+                src={src}
+                alt={`${partner.name} ${index + 1}`}
+                fill
+                className="object-cover"
+                sizes="100vw"
+              />
+            )}
           </div>
         ))}
       </div>
 
       {/* Sticky independently-scrolling left column */}
       <aside className="pointer-events-none fixed top-0 left-0 z-20 flex h-screen max-h-screen w-full max-w-[375px] flex-col px-5 py-5">
-        <div className="pointer-events-auto flex max-h-full flex-col gap-5 overflow-y-auto">
+        <div className="pointer-events-auto flex max-h-full flex-col gap-5 overflow-y-auto overscroll-none">
           <div className="relative h-[138px] w-[335px] shrink-0 border-[0.75px] border-ink bg-cream">
+            <CloseButton className="absolute top-[-0.5px] right-[-0.5px] md:fixed md:top-5 md:right-5" />
             <div className="absolute left-1/2 top-1/2 h-[88px] w-[215px] -translate-x-1/2 -translate-y-1/2 mix-blend-multiply">
               <div className="relative h-full w-full rotate-[4.87deg]">
                 <Image
@@ -51,12 +74,18 @@ export function PartnerExperience({ partner }: PartnerExperienceProps) {
             </div>
           </div>
 
-          <div className="relative flex h-[138px] w-[335px] shrink-0 flex-col border-[0.75px] border-ink bg-cream">
-            <div className="flex h-10 shrink-0 items-center justify-center border-b-[0.75px] border-ink">
-              <p className="text-[12px] uppercase tracking-[0.02em]">
-                Information
-              </p>
-            </div>
+          <div
+            className={`relative flex w-[335px] shrink-0 flex-col overflow-hidden border-[0.75px] border-ink bg-cream transition-[height] duration-300 ease-out ${
+              infoOpen ? "h-[138px]" : "h-10"
+            }`}
+          >
+            <button
+              type="button"
+              onClick={() => setInfoOpen((open) => !open)}
+              className="flex h-10 w-full shrink-0 items-center justify-center border-b-[0.75px] border-ink bg-cream text-[12px] uppercase tracking-[0.02em]"
+            >
+              Information
+            </button>
             <p className="px-4 py-3 text-[12px] leading-normal">
               {partner.description}
             </p>

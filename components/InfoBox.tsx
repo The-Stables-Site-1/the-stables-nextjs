@@ -1,14 +1,16 @@
 type InfoBoxProps = {
   title?: string;
   body?: string;
-  showContent?: boolean;
+  showTitle?: boolean;
+  showBody?: boolean;
   opaque?: boolean;
 };
 
 export function InfoBox({
   title = "INFORMATION",
   body,
-  showContent = true,
+  showTitle = true,
+  showBody = true,
   opaque = false,
 }: InfoBoxProps) {
   return (
@@ -18,13 +20,23 @@ export function InfoBox({
       }`}
     >
       <div className="flex h-10 shrink-0 items-center justify-center border-b-[0.75px] border-ink">
-        {showContent && (
-          <p className="text-[12px] uppercase tracking-[0.02em]">{title}</p>
-        )}
+        <p
+          className={`text-[12px] uppercase tracking-[0.02em] ${
+            showTitle ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          {title}
+        </p>
       </div>
-      {showContent && body && (
-        <p className="px-4 py-3 text-[12px] leading-normal">{body}</p>
-      )}
+      {body ? (
+        <p
+          className={`px-4 py-3 text-[12px] leading-normal ${
+            showBody ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          {body}
+        </p>
+      ) : null}
     </div>
   );
 }

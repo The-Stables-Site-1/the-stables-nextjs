@@ -21,7 +21,7 @@ export const partners: Partner[] = [
     slug: "dedcool",
     name: "DedCool",
     description:
-      "DEDCOOL is a genderless, vegan, non-toxic fragrance house built on making life smell really good. We translate signature scents across mediums, embedding fragrance into the products you use daily, from perfume and body wash to detergent and dryer sheets.",
+      "DEDCOOL is a genderless, vegan, non-toxic fragrance house built on making life smell good. We translate signature scents, embedding fragrance in daily products from perfume to detergent and dryer sheets.",
     stampLogo: PLACEHOLDER_LOGO,
     images: [
       "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/dedcool/hero.jpeg",

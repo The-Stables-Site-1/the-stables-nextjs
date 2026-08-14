@@ -6,18 +6,22 @@ import type { Partner } from "@/lib/partners";
 
 type PartnersListProps = {
   partners: Partner[];
-  showContent?: boolean;
+  showTitle?: boolean;
+  revealedCount?: number;
   opaque?: boolean;
   activeSlug?: string | null;
   onHover?: (slug: string | null) => void;
+  onSelect?: (slug: string) => void;
 };
 
 export function PartnersList({
   partners,
-  showContent = true,
+  showTitle = true,
+  revealedCount = partners.length,
   opaque = false,
   activeSlug = null,
   onHover,
+  onSelect,
 }: PartnersListProps) {
   const listRef = useRef<HTMLUListElement>(null);
   const onHoverRef = useRef(onHover);
@@ -62,9 +66,13 @@ export function PartnersList({
       }`}
     >
       <div className="flex h-10 items-center justify-center border-b-[0.75px] border-ink">
-        {showContent && (
-          <p className="text-[12px] uppercase tracking-[0.02em]">Partners</p>
-        )}
+        <p
+          className={`text-[12px] uppercase tracking-[0.02em] ${
+            showTitle ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          Partners
+        </p>
       </div>
       <ul ref={listRef} className="flex flex-col">
         {partners.map((partner, index) => {
@@ -81,20 +89,40 @@ export function PartnersList({
               <Link
                 href={`/partners/${partner.slug}`}
                 data-partner-slug={partner.slug}
-                className="relative flex h-10 items-center px-4 text-[13px] text-black"
+                className={`relative flex h-10 items-center px-4 text-[13px] text-black ${
+                  index < revealedCount ? "" : "pointer-events-none"
+                }`}
+                onClick={(event) => {
+                  if (!onSelect) return;
+                  if (
+                    event.metaKey ||
+                    event.ctrlKey ||
+                    event.shiftKey ||
+                    event.altKey ||
+                    event.button !== 0
+                  ) {
+                    return;
+                  }
+                  event.preventDefault();
+                  onSelect(partner.slug);
+                }}
               >
-                {showContent && (
-                  <>
-                    <span className="uppercase">
-                      {partner.name}
-                    </span>
-                    <span className="absolute right-4 grid size-2 place-items-center rounded-full border-[0.75px] border-black">
-                      {isActive && (
-                        <span className="size-1 rounded-full bg-black" />
-                      )}
-                    </span>
-                  </>
-                )}
+                <span
+                  className={`uppercase ${
+                    index < revealedCount ? "opacity-100" : "opacity-0"
+                  }`}
+                >
+                  {partner.name}
+                </span>
+                <span
+                  className={`absolute right-4 grid size-2 place-items-center rounded-full border-[0.75px] border-black ${
+                    index < revealedCount ? "opacity-100" : "opacity-0"
+                  }`}
+                >
+                  {isActive && (
+                    <span className="size-1 rounded-full bg-black" />
+                  )}
+                </span>
               </Link>
             </li>
           );
