@@ -13,6 +13,7 @@ type PartnerExperienceProps = {
 
 export function PartnerExperience({ partner }: PartnerExperienceProps) {
   const [infoOpen, setInfoOpen] = useState(true);
+  const [inquireOpen, setInquireOpen] = useState(true);
 
   useEffect(() => {
     markAppBooted();
@@ -20,7 +21,9 @@ export function PartnerExperience({ partner }: PartnerExperienceProps) {
 
   useEffect(() => {
     const onScroll = () => {
-      if (window.scrollY > 8) setInfoOpen(false);
+      const atTop = window.scrollY <= 8;
+      setInfoOpen(atTop);
+      setInquireOpen(atTop);
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
@@ -91,10 +94,18 @@ export function PartnerExperience({ partner }: PartnerExperienceProps) {
             </p>
           </div>
 
-          <div className="flex w-[335px] shrink-0 flex-col bg-cream">
-            <div className="relative -mb-px flex h-10 items-center justify-center border-[0.75px] border-ink bg-cream text-[12px] uppercase tracking-[0.02em]">
+          <div
+            className={`flex w-[335px] shrink-0 flex-col overflow-hidden bg-cream transition-[height] duration-300 ease-out ${
+              inquireOpen ? "h-[157px]" : "h-10"
+            }`}
+          >
+            <button
+              type="button"
+              onClick={() => setInquireOpen((open) => !open)}
+              className="relative -mb-px flex h-10 w-full shrink-0 items-center justify-center border-[0.75px] border-ink bg-cream text-[12px] uppercase tracking-[0.02em]"
+            >
               Inquire
-            </div>
+            </button>
             <Link
               href={partner.links.wholesale}
               className="relative -mb-px flex h-10 items-center border-[0.75px] border-ink bg-cream px-4 text-[12px] uppercase tracking-[0.02em]"
