@@ -9,11 +9,11 @@ const MAX_TEX = 768;
 const MAX_CANVAS_W = 960;
 const MAX_CANVAS_H = 540;
 const MAX_ANIM_FRAMES = 52;
-const MAX_ANIM_MS = 900;
+const MAX_ANIM_MS = 110;
 const SETTLE = 0.01;
-const PRINT_STEP = 1 / 36;
-const MORPH_STEP = 1 / 30;
-const TAIL_STEP = 1 / 64;
+const PRINT_STEP = 1 / 4.5;
+const MORPH_STEP = 1 / 3.75;
+const TAIL_STEP = 1 / 8;
 
 const VERT = /* glsl */ `
   attribute vec2 aPos;
