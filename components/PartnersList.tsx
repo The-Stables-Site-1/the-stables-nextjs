@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Partner } from "@/lib/partners";
 
 type PartnersListProps = {
@@ -23,6 +23,7 @@ export function PartnersList({
   onHover,
   onSelect,
 }: PartnersListProps) {
+  const [open, setOpen] = useState(true);
   const listRef = useRef<HTMLUListElement>(null);
   const onHoverRef = useRef(onHover);
   onHoverRef.current = onHover;
@@ -65,16 +66,28 @@ export function PartnersList({
         opaque ? "bg-cream" : "bg-cream"
       }`}
     >
-      <div className="flex h-10 items-center justify-center border-b-[0.75px] border-ink">
-        <p
+      <button
+        type="button"
+        aria-expanded={open}
+        onClick={() => {
+          setOpen((current) => {
+            if (current) onHoverRef.current?.(null);
+            return !current;
+          });
+        }}
+        className={`flex h-10 w-full cursor-pointer items-center justify-center ${
+          open ? "border-b-[0.75px] border-ink" : ""
+        }`}
+      >
+        <span
           className={`text-[12px] uppercase tracking-[0.02em] ${
             showTitle ? "opacity-100" : "opacity-0"
           }`}
         >
           Partners
-        </p>
-      </div>
-      <ul ref={listRef} className="flex flex-col">
+        </span>
+      </button>
+      <ul ref={listRef} className={`flex flex-col ${open ? "" : "hidden"}`}>
         {partners.map((partner, index) => {
           const isActive = activeSlug === partner.slug;
           return (
