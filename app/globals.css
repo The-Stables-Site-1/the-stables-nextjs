@@ -34,3 +34,11 @@ body {
 ::selection {
   background: color-mix(in srgb, var(--color-ink) 20%, transparent);
 }
+
+.scroll-hidden {
+  scrollbar-width: none;
+}
+
+.scroll-hidden::-webkit-scrollbar {
+  display: none;
+}
