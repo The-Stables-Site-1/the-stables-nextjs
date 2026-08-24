@@ -10,9 +10,22 @@ export function CloseButton({
   return (
     <Link
       href={href}
-      className={`z-50 flex h-8 w-[63px] items-center justify-center border-[0.75px] border-ink-strong bg-cream p-3 text-[12px] uppercase tracking-[0.02em] text-black ${className}`}
+      aria-label="Close"
+      className={`z-50 flex h-10 w-10 items-center justify-center border-[0.75px] border-ink bg-cream text-black ${className}`}
     >
-      CLOSE
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 20 20"
+        fill="none"
+        aria-hidden
+      >
+        <path
+          d="M1 1L19 19M19 1L1 19"
+          stroke="currentColor"
+          strokeWidth="1"
+        />
+      </svg>
     </Link>
   );
 }

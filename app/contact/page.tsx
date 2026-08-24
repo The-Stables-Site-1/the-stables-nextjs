@@ -21,7 +21,7 @@ export default function ContactPage() {
       <CloseButton />
 
       <div className="px-5 py-5">
-        <form onSubmit={onSubmit} className="w-[335px]">
+        <form onSubmit={onSubmit} className="w-[335px] max-[599px]:w-full">
           <div className="flex flex-col">
             <div className="relative -mb-px flex h-10 items-center justify-center border-[0.75px] border-ink bg-cream">
               <span className="text-[12px] uppercase tracking-[0.02em]">

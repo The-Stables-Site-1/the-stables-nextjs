@@ -1,15 +1,28 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AddressBox } from "@/components/AddressBox";
-import { ContactLinks } from "@/components/ContactLinks";
-import { HeroShader, type HeroShaderHandle } from "@/components/HeroShader";
+import { ContactLinks, partnerContactRows } from "@/components/ContactLinks";
 import { InfoBox } from "@/components/InfoBox";
 import { Loader } from "@/components/Loader";
 import { PartnersList } from "@/components/PartnersList";
 import { hasAppBooted, markAppBooted } from "@/lib/boot";
+import {
+  HEADER_OFF_MS,
+  ITEM_STAGGER_OUT_MS,
+  LOGO_HOLD_MS,
+  MORPH_MS,
+} from "@/lib/morph";
 import type { Partner } from "@/lib/partners";
+import {
+  getSilkscreenPrinter,
+  PRINT_IN,
+  PRINT_IN_MS,
+  UNPRINT,
+  UNPRINT_MS,
+  type SilkscreenPrinter,
+} from "@/lib/silkscreen-gl";
 import { site } from "@/lib/site";
 
 type Phase = "loader" | "intro" | "ready";
@@ -21,57 +34,33 @@ const BOX_REVEAL = 4;
 /** Set to true to restore the horse intro loader. */
 const SHOW_HORSE_LOADER = false;
 
-/** Hover plate: a scaled-down copy of the full-bleed frame, dropped somewhere clear. */
-const PLATE_SCALE = 0.42;
-const PLATE_MOVE_MS = 520;
-const ZOOM_MS = 820;
-const ZOOM_EASE = "cubic-bezier(0.66, 0, 0.28, 1)";
-const MOVE_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
-const COLUMN_WIDTH = 375;
-const COLUMN_GUTTER = 44;
-const EDGE_MARGIN = 28;
-const PLATE_COLS = 3;
-const PLATE_ROWS = 3;
+const LINGER_MS = 150;
+const IDLE_MS = 4000;
+const CYCLE_MS = 1800;
+const MAX_PLATES = 8;
 
-type Plate = { x: number; y: number; ms: number };
+type Plate = {
+  id: number;
+  slug: string;
+  url: string;
+  bitmap: ImageBitmap;
+};
 
-/**
- * Picks a cell in the open area right of the content column, keeping consecutive
- * hovers in different cells so the plate always visibly jumps.
- */
-function pickPlate(lastCell: number): { plate: Plate; cell: number } {
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  const boxW = vw * PLATE_SCALE;
-  const boxH = vh * PLATE_SCALE;
-  const restLeft = (vw - boxW) / 2;
-  const restTop = (vh - boxH) / 2;
-
-  const maxLeft = Math.max(EDGE_MARGIN, vw - boxW - EDGE_MARGIN);
-  const minLeft = Math.min(COLUMN_WIDTH + COLUMN_GUTTER, maxLeft);
-  const maxTop = Math.max(EDGE_MARGIN, vh - boxH - EDGE_MARGIN);
-  const minTop = Math.min(EDGE_MARGIN, maxTop);
-
-  const cells = PLATE_COLS * PLATE_ROWS;
-  let cell = Math.floor(Math.random() * cells);
-  if (cell === lastCell) {
-    cell = (cell + 1 + Math.floor(Math.random() * (cells - 1))) % cells;
-  }
-
-  const col = cell % PLATE_COLS;
-  const row = Math.floor(cell / PLATE_COLS);
-  const left =
-    minLeft + (maxLeft - minLeft) * ((col + Math.random()) / PLATE_COLS);
-  const top = minTop + (maxTop - minTop) * ((row + Math.random()) / PLATE_ROWS);
-
-  return {
-    plate: {
-      x: Math.round(left - restLeft),
-      y: Math.round(top - restTop),
-      ms: PLATE_MOVE_MS,
-    },
-    cell,
-  };
+function StampCanvas({ bitmap }: { bitmap: ImageBitmap }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (el.width !== bitmap.width || el.height !== bitmap.height) {
+      el.width = bitmap.width;
+      el.height = bitmap.height;
+    }
+    const ctx = el.getContext("2d", { alpha: true });
+    if (!ctx) return;
+    ctx.clearRect(0, 0, el.width, el.height);
+    ctx.drawImage(bitmap, 0, 0);
+  }, [bitmap]);
+  return <canvas ref={ref} className="h-full w-full object-cover" />;
 }
 
 type HomeExperienceProps = {
@@ -90,14 +79,112 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
   );
   const [activeSlug, setActiveSlug] = useState<string | null>(null);
   const [locked, setLocked] = useState(false);
-  const [zooming, setZooming] = useState(false);
-  const [plate, setPlate] = useState<Plate>({ x: 0, y: 0, ms: 0 });
-  const shaderRef = useRef<HeroShaderHandle>(null);
-  const lastCellRef = useRef(-1);
-  const zoomTimerRef = useRef(0);
+  const [morphPartner, setMorphPartner] = useState<Partner | null>(null);
+  const [listVisible, setListVisible] = useState<number | null>(null);
+  const [headerLabel, setHeaderLabel] = useState(true);
+  const [morphLogo, setMorphLogo] = useState(false);
+  const [plates, setPlates] = useState<Plate[]>([]);
+  const currentPlateIdRef = useRef<number | null>(null);
+  const nextPlateIdRef = useRef(1);
+  const lingerTimersRef = useRef<Map<number, number>>(new Map());
+  const deadIdsRef = useRef(new Set<number>());
+  const morphTimersRef = useRef<number[]>([]);
+  const lockedRef = useRef(false);
+  const printerRef = useRef<SilkscreenPrinter | null>(null);
+  const urlByIdRef = useRef<Map<number, string>>(new Map());
+  const progressByIdRef = useRef<Map<number, number>>(new Map());
+  const stopInRef = useRef(new Set<number>());
+  const idleTimerRef = useRef(0);
+  const cycleTimerRef = useRef(0);
+  const cyclingRef = useRef(false);
+  const cycleIndexRef = useRef(0);
+  const partnersRef = useRef(partners);
+  const hoverRef = useRef<(slug: string | null) => void>(() => {});
+  const stopIdleRef = useRef(() => {});
+  const armIdleRef = useRef(() => {});
   const router = useRouter();
 
-  useEffect(() => () => window.clearTimeout(zoomTimerRef.current), []);
+  const clearLinger = (id: number) => {
+    const timer = lingerTimersRef.current.get(id);
+    if (timer) window.clearTimeout(timer);
+    lingerTimersRef.current.delete(id);
+  };
+
+  const setPlateSrc = (id: number, bitmap: ImageBitmap) => {
+    setPlates((current) =>
+      current.map((plate) => (plate.id === id ? { ...plate, bitmap } : plate)),
+    );
+  };
+
+  const removePlate = (id: number) => {
+    deadIdsRef.current.add(id);
+    stopInRef.current.add(id);
+    clearLinger(id);
+    urlByIdRef.current.delete(id);
+    progressByIdRef.current.delete(id);
+    setPlates((current) => current.filter((plate) => plate.id !== id));
+  };
+
+  const unprintPlate = (id: number) => {
+    stopInRef.current.add(id);
+    clearLinger(id);
+    const url = urlByIdRef.current.get(id);
+    const printer = printerRef.current;
+    if (!url || !printer) {
+      removePlate(id);
+      return;
+    }
+
+    void (async () => {
+      const from = progressByIdRef.current.get(id) ?? 1;
+      const steps = UNPRINT.filter((progress) => progress < from - 0.03);
+      const ladder = steps.length ? steps : [0];
+      await Promise.all(
+        ladder.map((progress) => printer.print(url, progress, 0, true)),
+      );
+      for (let i = 0; i < ladder.length; i += 1) {
+        if (deadIdsRef.current.has(id) || lockedRef.current) return;
+        const src = printer.peek(url, ladder[i], 0);
+        if (!src) continue;
+        progressByIdRef.current.set(id, ladder[i]);
+        setPlateSrc(id, src);
+        await new Promise((resolve) =>
+          window.setTimeout(resolve, UNPRINT_MS[Math.min(i, UNPRINT_MS.length - 1)]),
+        );
+      }
+      if (!deadIdsRef.current.has(id) && !lockedRef.current) removePlate(id);
+    })();
+  };
+
+  const lingerPlate = (id: number) => {
+    stopInRef.current.add(id);
+    clearLinger(id);
+    const timer = window.setTimeout(() => {
+      lingerTimersRef.current.delete(id);
+      unprintPlate(id);
+    }, LINGER_MS);
+    lingerTimersRef.current.set(id, timer);
+  };
+
+  useEffect(() => {
+    const printer = getSilkscreenPrinter();
+    printerRef.current = printer;
+    for (const partner of partners) {
+      const url = partner.images[0];
+      if (url) void printer?.print(url, PRINT_IN[0], 0);
+    }
+  }, [partners]);
+
+  useEffect(
+    () => () => {
+      morphTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+      window.clearTimeout(idleTimerRef.current);
+      window.clearTimeout(cycleTimerRef.current);
+      lingerTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+      lingerTimersRef.current.clear();
+    },
+    [],
+  );
 
   useEffect(() => {
     const alreadyBooted = hasAppBooted();
@@ -144,39 +231,143 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
   }, [maxReveal]);
 
   const ready = phase === "ready";
-  const partnerStart = 9;
-  const contactStart = partnerStart + partners.length;
+  const partnerStart = 7;
+  const infoTitleAt = partnerStart + partners.length;
+  const infoBodyAt = infoTitleAt + 1;
+  const contactStart = infoBodyAt + 1;
 
-  const heroUrl = useMemo(() => {
-    if (!activeSlug) return null;
-    return partners.find((p) => p.slug === activeSlug)?.images[0] ?? null;
-  }, [activeSlug, partners]);
-
-  const imageOrder = useMemo(
-    () =>
-      partners
-        .map((partner) => partner.images[0])
-        .filter((url): url is string => Boolean(url)),
-    [partners],
-  );
+  const pushPlate = (plate: Plate) => {
+    setPlates((current) => {
+      const kept =
+        current.length >= MAX_PLATES ? current.slice(-(MAX_PLATES - 1)) : current;
+      if (kept.length < current.length) {
+        const keptIds = new Set(kept.map((item) => item.id));
+        current.forEach((item) => {
+          if (!keptIds.has(item.id)) clearLinger(item.id);
+        });
+      }
+      return [...kept, plate];
+    });
+  };
 
   const handleHover = (slug: string | null) => {
-    if (slug && slug !== activeSlug) {
-      const next = pickPlate(lastCellRef.current);
-      lastCellRef.current = next.cell;
-      // Land in place on first appearance; glide between partners after that.
-      setPlate({ ...next.plate, ms: activeSlug ? next.plate.ms : 0 });
+    if (slug === activeSlug) return;
+
+    if (currentPlateIdRef.current != null) {
+      if (slug) lingerPlate(currentPlateIdRef.current);
+      else unprintPlate(currentPlateIdRef.current);
+      currentPlateIdRef.current = null;
     }
+
     setActiveSlug(slug);
+    if (!slug) return;
+
+    const url = partners.find((partner) => partner.slug === slug)?.images[0];
+    if (!url) return;
+
+    const id = nextPlateIdRef.current;
+    nextPlateIdRef.current += 1;
+    currentPlateIdRef.current = id;
+    urlByIdRef.current.set(id, url);
+    stopInRef.current.delete(id);
+    progressByIdRef.current.set(id, 0);
+
+    void (async () => {
+      const printer = printerRef.current;
+      if (!printer) return;
+      await Promise.all(
+        PRINT_IN.map((progress) => printer.print(url, progress, 0, true)),
+      );
+      if (
+        stopInRef.current.has(id) ||
+        deadIdsRef.current.has(id) ||
+        lockedRef.current
+      ) {
+        return;
+      }
+      for (const progress of UNPRINT) void printer.print(url, progress, 0);
+      for (let i = 0; i < PRINT_IN.length; i += 1) {
+        if (
+          stopInRef.current.has(id) ||
+          deadIdsRef.current.has(id) ||
+          lockedRef.current
+        ) {
+          return;
+        }
+        const src = printer.peek(url, PRINT_IN[i], 0);
+        if (!src) continue;
+        progressByIdRef.current.set(id, PRINT_IN[i]);
+        if (i === 0) {
+          pushPlate({ id, slug, url, bitmap: src });
+        } else {
+          setPlateSrc(id, src);
+        }
+        await new Promise((resolve) =>
+          window.setTimeout(resolve, PRINT_IN_MS[i]),
+        );
+      }
+    })();
+  };
+
+  const stopIdle = () => {
+    window.clearTimeout(idleTimerRef.current);
+    window.clearTimeout(cycleTimerRef.current);
+    idleTimerRef.current = 0;
+    cycleTimerRef.current = 0;
+    cyclingRef.current = false;
+  };
+
+  const runCycleTick = () => {
+    if (!cyclingRef.current || lockedRef.current) return;
+    const list = partnersRef.current;
+    if (!list.length) return;
+    const index = cycleIndexRef.current;
+    hoverRef.current(list[index].slug);
+    if (index >= list.length - 1) {
+      cyclingRef.current = false;
+      cycleTimerRef.current = window.setTimeout(() => {
+        if (lockedRef.current) return;
+        hoverRef.current(null);
+        armIdle();
+      }, CYCLE_MS);
+      return;
+    }
+    cycleIndexRef.current = index + 1;
+    cycleTimerRef.current = window.setTimeout(runCycleTick, CYCLE_MS);
+  };
+
+  const armIdle = () => {
+    stopIdle();
+    if (lockedRef.current) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    idleTimerRef.current = window.setTimeout(() => {
+      cyclingRef.current = true;
+      cycleIndexRef.current = 0;
+      runCycleTick();
+    }, IDLE_MS);
+  };
+
+  const onPartnerHover = (slug: string | null) => {
+    if (slug) {
+      stopIdle();
+      handleHover(slug);
+      return;
+    }
+    handleHover(null);
+    if (!lockedRef.current) armIdle();
   };
 
   const handleSelect = (slug: string) => {
+    stopIdle();
+    const partner = partners.find((item) => item.slug === slug);
+    if (!partner) return;
+
     const href = `/partners/${slug}`;
+    lockedRef.current = true;
     setLocked(true);
     setActiveSlug(slug);
 
-    const url =
-      partners.find((partner) => partner.slug === slug)?.images[0] ?? null;
+    const url = partner.images[0] ?? null;
     const reduceMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches;
@@ -186,81 +377,140 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
       return;
     }
 
-    setZooming(true);
+    lingerTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    lingerTimersRef.current.clear();
+
+    // The halftone plate stays exactly where it is; only the modules move.
+    setPlates((current) => {
+      const latest = [...current].reverse().find((plate) => plate.slug === slug);
+      if (latest) {
+        currentPlateIdRef.current = latest.id;
+        return [latest];
+      }
+
+      const bitmap = printerRef.current?.peek(url);
+      if (!bitmap) return current;
+      const id = nextPlateIdRef.current;
+      nextPlateIdRef.current += 1;
+      currentPlateIdRef.current = id;
+      urlByIdRef.current.set(id, url);
+      return [{ id, slug, url, bitmap }];
+    });
+
     router.prefetch(href);
-    shaderRef.current?.revealColor(url);
-    zoomTimerRef.current = window.setTimeout(() => router.push(href), ZOOM_MS);
+    setMorphPartner(partner);
+
+    const after = (ms: number, run: () => void) => {
+      morphTimersRef.current.push(window.setTimeout(run, ms));
+    };
+
+    const total = partners.length;
+    for (let i = 0; i < total; i += 1) {
+      after(ITEM_STAGGER_OUT_MS * (i + 1), () => setListVisible(total - i - 1));
+    }
+
+    const rowsGone = ITEM_STAGGER_OUT_MS * total + HEADER_OFF_MS;
+    after(rowsGone, () => setHeaderLabel(false));
+
+    const logoAt = Math.max(rowsGone, MORPH_MS);
+    after(logoAt, () => setMorphLogo(true));
+    after(logoAt + LOGO_HOLD_MS, () => router.push(href));
   };
 
+  // Keep the idle cycle pointed at the latest handlers without restarting it.
+  useEffect(() => {
+    partnersRef.current = partners;
+    hoverRef.current = handleHover;
+    stopIdleRef.current = stopIdle;
+    armIdleRef.current = armIdle;
+  });
+
+  useEffect(() => {
+    if (phase !== "ready" || locked) return;
+    armIdleRef.current();
+    return () => stopIdleRef.current();
+  }, [phase, locked]);
+
   const interactive = !locked && phase !== "loader";
-  const plateTransform = zooming
-    ? "translate3d(0px, 0px, 0px) scale(1)"
-    : `translate3d(${plate.x}px, ${plate.y}px, 0px) scale(${PLATE_SCALE})`;
+  const hasPlates = plates.length > 0;
+  const morphing = morphPartner != null;
 
   return (
     <div className="relative min-h-screen bg-cream">
       <Loader visible={phase === "loader"} />
 
-      <HeroShader
-        ref={shaderRef}
-        imageUrl={heroUrl}
-        imageOrder={imageOrder}
-        visible={Boolean(heroUrl) || locked}
-        transform={plateTransform}
-        transitionMs={zooming ? ZOOM_MS : plate.ms}
-        easing={zooming ? ZOOM_EASE : MOVE_EASE}
-      />
+      <div
+        className="pointer-events-none fixed inset-0 z-0 isolate overflow-hidden bg-cream"
+        aria-hidden
+      >
+        {plates.map((plate) => (
+          <div
+            key={plate.id}
+            className="absolute inset-0 overflow-hidden"
+            style={{ mixBlendMode: "darken" }}
+          >
+            <StampCanvas bitmap={plate.bitmap} />
+          </div>
+        ))}
+      </div>
 
       <div
         className={`relative z-10 flex min-h-screen ${
           phase === "loader" ? "opacity-0" : "opacity-100"
         }`}
-        style={{ perspective: "1100px" }}
       >
-        <aside
-          className={`flex w-full max-w-[375px] flex-col gap-[20px] px-5 py-5 ${
-            zooming ? "pointer-events-none" : ""
-          }`}
-          style={{
-            transform: zooming
-              ? "translate3d(0px, -12px, 460px)"
-              : "translate3d(0px, 0px, 0px)",
-            opacity: zooming ? 0 : 1,
-            transition: `transform ${ZOOM_MS}ms ${ZOOM_EASE}, opacity ${Math.round(
-              ZOOM_MS * 0.7,
-            )}ms ease-in ${Math.round(ZOOM_MS * 0.22)}ms`,
-            willChange: "transform",
-          }}
-        >
+        <aside className="flex w-full max-w-[375px] flex-col gap-[5px] px-5 py-5 max-[599px]:max-w-none">
           <div>
-            <AddressBox showLogo={reveal >= 5} opaque={ready || Boolean(activeSlug)} />
-          </div>
-
-          <div>
-            <InfoBox
-              body={site.information}
-              showTitle={reveal >= 6}
-              showBody={reveal >= 7}
-              opaque={ready || Boolean(activeSlug)}
+            <AddressBox
+              showLogo={reveal >= 5}
+              opaque={ready || hasPlates}
+              collapsed={morphing}
             />
           </div>
 
           <div>
             <PartnersList
               partners={partners}
-              showTitle={reveal >= 8}
+              showTitle={reveal >= 6}
               revealedCount={Math.max(0, reveal - (partnerStart - 1))}
-              opaque={ready || Boolean(activeSlug)}
+              opaque={ready || hasPlates}
               activeSlug={activeSlug}
-              onHover={interactive ? handleHover : undefined}
+              onHover={interactive ? onPartnerHover : undefined}
               onSelect={interactive ? handleSelect : undefined}
+              collapsed={morphing}
+              visibleCount={listVisible ?? undefined}
+              showHeaderLabel={headerLabel}
+              logo={
+                morphPartner && morphLogo
+                  ? { src: morphPartner.stampLogo, alt: morphPartner.name }
+                  : null
+              }
+            />
+          </div>
+
+          <div>
+            <InfoBox
+              body={morphPartner ? morphPartner.description : site.information}
+              showTitle={reveal >= infoTitleAt}
+              showBody={reveal >= infoBodyAt}
+              opaque={ready || hasPlates}
             />
           </div>
 
           <div>
             <ContactLinks
-              revealedCount={Math.max(0, reveal - (contactStart - 1))}
-              opaque={ready || Boolean(activeSlug)}
+              revealedCount={
+                morphPartner
+                  ? undefined
+                  : Math.max(0, reveal - (contactStart - 1))
+              }
+              opaque={ready || hasPlates}
+              title={morphPartner ? "INQUIRE" : "CONTACT"}
+              rows={
+                morphPartner
+                  ? partnerContactRows(morphPartner.links)
+                  : undefined
+              }
             />
           </div>
         </aside>

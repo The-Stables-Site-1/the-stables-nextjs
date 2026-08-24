@@ -2,53 +2,93 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { MORPH_EASE, MORPH_MS, ROW_H } from "@/lib/morph";
 import { site } from "@/lib/site";
+
+export type ContactRow = {
+  label: string;
+  href: string;
+  external?: boolean;
+};
 
 type ContactLinksProps = {
   revealedCount?: number;
   opaque?: boolean;
+  title?: string;
+  rows?: readonly ContactRow[];
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
-const rows = [
+const defaultRows: readonly ContactRow[] = [
   { label: "WHOLESALE", href: site.links.wholesale },
   { label: "PRESS", href: site.links.press },
   { label: "INSTAGRAM", href: site.links.instagram, external: true },
-] as const;
+];
+
+/** The home contact rows become these the moment a partner is chosen. */
+export function partnerContactRows(links: {
+  wholesale: string;
+  instagram: string;
+  website: string;
+}): readonly ContactRow[] {
+  return [
+    { label: "WHOLESALE", href: links.wholesale },
+    { label: "INSTAGRAM", href: links.instagram, external: true },
+    { label: "WEBSITE", href: links.website, external: true },
+  ];
+}
 
 export function ContactLinks({
-  revealedCount = rows.length + 1,
+  revealedCount,
   opaque = false,
+  title = "CONTACT",
+  rows = defaultRows,
+  open,
+  onOpenChange,
 }: ContactLinksProps) {
-  const [open, setOpen] = useState(true);
+  const [uncontrolled, setUncontrolled] = useState(true);
+  const isOpen = open ?? uncontrolled;
+  const setOpen = (next: boolean) => {
+    onOpenChange?.(next);
+    if (open === undefined) setUncontrolled(next);
+  };
+  const revealed = revealedCount ?? rows.length + 1;
   const rowClass =
-    "relative -mb-px flex h-10 w-full items-center border-[0.75px] border-ink bg-cream px-4 text-[12px] uppercase tracking-[0.02em] last:mb-0";
+    "relative -mb-px flex h-10 w-full shrink-0 items-center border-[0.75px] border-ink bg-cream px-4 text-[12px] uppercase tracking-[0.02em] last:mb-0";
 
   return (
     <div
-      className={`flex w-[335px] flex-col ${opaque ? "bg-cream" : "bg-cream"}`}
+      className={`flex w-[335px] flex-col overflow-hidden max-[599px]:w-full ${
+        opaque ? "bg-cream" : "bg-cream"
+      }`}
+      style={{
+        height: isOpen
+          ? ROW_H * (1 + rows.length) - rows.length
+          : ROW_H,
+        transition: `height ${MORPH_MS}ms ${MORPH_EASE}`,
+      }}
     >
       <button
         type="button"
-        aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
+        aria-expanded={isOpen}
+        onClick={() => setOpen(!isOpen)}
         className={`${rowClass} cursor-pointer justify-center`}
         style={{ cursor: "pointer" }}
       >
-        <span className={revealedCount > 0 ? "opacity-100" : "opacity-0"}>
-          CONTACT
+        <span className={revealed > 0 ? "opacity-100" : "opacity-0"}>
+          {title}
         </span>
       </button>
       {rows.map((row, index) => {
-        const className = `${rowClass} justify-start ${open ? "" : "hidden"}`;
+        const className = `${rowClass} justify-start`;
         const label = (
-          <span
-            className={index + 1 < revealedCount ? "opacity-100" : "opacity-0"}
-          >
+          <span className={index + 1 < revealed ? "opacity-100" : "opacity-0"}>
             {row.label}
           </span>
         );
 
-        if ("external" in row && row.external) {
+        if (row.external) {
           return (
             <a
               key={row.label}

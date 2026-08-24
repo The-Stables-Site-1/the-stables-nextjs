@@ -1,234 +1,341 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import Image from "next/image";
-import Link from "next/link";
-import { CloseButton } from "@/components/CloseButton";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { AddressBox } from "@/components/AddressBox";
+import { ContactLinks, partnerContactRows } from "@/components/ContactLinks";
+import { InfoBox } from "@/components/InfoBox";
+import { PartnersList } from "@/components/PartnersList";
 import { markAppBooted } from "@/lib/boot";
-import type { Partner } from "@/lib/partners";
+import {
+  HEADER_OFF_MS,
+  ITEM_STAGGER_MS,
+  MORPH_MS,
+} from "@/lib/morph";
+import { partners as allPartners, type Partner } from "@/lib/partners";
+import {
+  getSilkscreenPrinter,
+  peekPrinted,
+  PRINT_IN,
+  UNPRINT,
+  UNPRINT_MS,
+  type SilkscreenPrinter,
+} from "@/lib/silkscreen-gl";
+import { site } from "@/lib/site";
 
-const CONTENT_STAGGER_MS = 40;
-const MAX_REVEAL = 7;
-/** The column arrives along Z, then the rows stagger in behind it. */
-const ENTER_MS = 700;
-const ENTER_EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
-const STAGGER_DELAY_MS = 420;
+/** How long each frame holds before the next one prints over it. */
+const SLIDE_MS = 4200;
+/** Slightly snappier than the home hover ladder so hops don't hitch. */
+const SLIDE_IN_MS = [22, 50, 30, 54, 32] as const;
+
+type Slide = {
+  id: number;
+  url: string;
+  bitmap: ImageBitmap;
+};
+
+function SlideCanvas({ bitmap }: { bitmap: ImageBitmap }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (el.width !== bitmap.width || el.height !== bitmap.height) {
+      el.width = bitmap.width;
+      el.height = bitmap.height;
+    }
+    const ctx = el.getContext("2d", { alpha: true });
+    if (!ctx) return;
+    ctx.clearRect(0, 0, el.width, el.height);
+    ctx.drawImage(bitmap, 0, 0);
+  }, [bitmap]);
+  return <canvas ref={ref} className="h-full w-full object-cover" />;
+}
+
+function initialSlides(partner: Partner): Slide[] {
+  const url = partner.images[0];
+  if (!url) return [];
+  const bitmap = peekPrinted(url);
+  if (!bitmap) return [];
+  return [{ id: 1, url, bitmap }];
+}
 
 type PartnerExperienceProps = {
   partner: Partner;
 };
 
 export function PartnerExperience({ partner }: PartnerExperienceProps) {
-  const [infoOpen, setInfoOpen] = useState(true);
-  const [inquireOpen, setInquireOpen] = useState(true);
-  const [reveal, setReveal] = useState(0);
-  const [entered, setEntered] = useState(false);
-  const galleryRef = useRef<HTMLDivElement>(null);
+  const router = useRouter();
+  const [slides, setSlides] = useState<Slide[]>(() => initialSlides(partner));
+  const [leaving, setLeaving] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
+  const [listVisible, setListVisible] = useState(0);
+  const [headerLabel, setHeaderLabel] = useState(false);
+  const [showLogo, setShowLogo] = useState(true);
+  const [detailOpen, setDetailOpen] = useState(true);
+  const printerRef = useRef<SilkscreenPrinter | null>(null);
+  const nextIdRef = useRef(1);
+  const indexRef = useRef(0);
+  const runRef = useRef(0);
+  const timerRef = useRef(0);
+  const busyRef = useRef(false);
+  const leavingRef = useRef(false);
+  const morphTimersRef = useRef<number[]>([]);
+  const advanceRef = useRef(() => {});
 
   useEffect(() => {
-    setReveal(0);
-    setEntered(false);
     markAppBooted();
+    router.prefetch("/");
+  }, [router]);
+
+  useEffect(() => {
+    const printer = getSilkscreenPrinter();
+    printerRef.current = printer;
+    const images = partner.images;
+    const hero = images[0];
+    indexRef.current = 0;
+    runRef.current += 1;
+    busyRef.current = false;
+    if (hero && peekPrinted(hero)) nextIdRef.current = 2;
+
+    const wait = (ms: number) =>
+      new Promise((resolve) => window.setTimeout(resolve, ms));
+
+    const warm = (url: string | undefined) => {
+      if (!printer || !url) return;
+      for (const progress of PRINT_IN) void printer.print(url, progress, 0);
+    };
+
+    const schedule = () => {
+      window.clearTimeout(timerRef.current);
+      if (leavingRef.current || images.length < 2) return;
+      timerRef.current = window.setTimeout(
+        () => advanceRef.current(),
+        SLIDE_MS,
+      );
+    };
+
+    /** Prints the next frame on top, then drops the one underneath. */
+    const show = async (index: number, instant: boolean) => {
+      if (!printer || leavingRef.current) return;
+      const run = runRef.current;
+      const url = images[index];
+      if (!url) return;
+      const id = nextIdRef.current;
+      nextIdRef.current += 1;
+      busyRef.current = true;
+
+      if (instant) {
+        const already = peekPrinted(url);
+        if (already) {
+          setSlides((current) =>
+            current.some((slide) => slide.url === url)
+              ? current
+              : [{ id, url, bitmap: already }],
+          );
+          busyRef.current = false;
+          schedule();
+          warm(images[1] ?? url);
+          return;
+        }
+        const bitmap = await printer.print(url, 1, 0, true);
+        if (!bitmap || run !== runRef.current || leavingRef.current) return;
+        setSlides([{ id, url, bitmap }]);
+        busyRef.current = false;
+        schedule();
+        warm(images[1] ?? url);
+        return;
+      }
+
+      for (let step = 0; step < PRINT_IN.length; step += 1) {
+        if (run !== runRef.current || leavingRef.current) return;
+        const progress = PRINT_IN[step];
+        const bitmap =
+          printer.peek(url, progress, 0) ??
+          (await printer.print(url, progress, 0, true));
+        if (!bitmap || run !== runRef.current || leavingRef.current) return;
+        if (step === 0) {
+          setSlides((current) => [...current.slice(-1), { id, url, bitmap }]);
+        } else {
+          setSlides((current) =>
+            current.map((slide) =>
+              slide.id === id ? { ...slide, bitmap } : slide,
+            ),
+          );
+        }
+        await wait(SLIDE_IN_MS[step]);
+      }
+      if (run !== runRef.current || leavingRef.current) return;
+      setSlides((current) => current.filter((slide) => slide.id === id));
+      busyRef.current = false;
+      schedule();
+      warm(images[(index + 1) % images.length]);
+    };
+
+    advanceRef.current = () => {
+      if (leavingRef.current || busyRef.current || images.length < 2) return;
+      window.clearTimeout(timerRef.current);
+      indexRef.current = (indexRef.current + 1) % images.length;
+      void show(indexRef.current, false);
+    };
+
+    void show(0, true);
+    for (const src of images.slice(1, 3)) warm(src);
+
+    return () => {
+      runRef.current += 1;
+      window.clearTimeout(timerRef.current);
+    };
+  }, [partner]);
+
+  const handleBack = () => {
+    if (leavingRef.current) return;
+    leavingRef.current = true;
+    setLeaving(true);
+    window.clearTimeout(timerRef.current);
+    runRef.current += 1;
+    busyRef.current = false;
 
     const reduceMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches;
     if (reduceMotion) {
-      setEntered(true);
-      setReveal(MAX_REVEAL);
+      router.push("/");
       return;
     }
 
-    let step = 0;
-    let timer = 0;
-    const tick = () => {
-      step += 1;
-      setReveal(step);
-      if (step >= MAX_REVEAL) return;
-      timer = window.setTimeout(tick, CONTENT_STAGGER_MS);
-    };
-    const frame = requestAnimationFrame(() => setEntered(true));
-    timer = window.setTimeout(tick, STAGGER_DELAY_MS);
+    const wait = (ms: number) =>
+      new Promise((resolve) => window.setTimeout(resolve, ms));
 
-    return () => {
-      cancelAnimationFrame(frame);
-      window.clearTimeout(timer);
-    };
-  }, [partner.slug]);
+    const current = slides.at(-1);
 
-  useEffect(() => {
-    const gallery = galleryRef.current;
-    if (!gallery) return;
-
-    // The zoom hands off to the first frame, so ignore any restored offset.
-    gallery.scrollLeft = 0;
-
-    const onScroll = () => {
-      const atStart = gallery.scrollLeft <= 8;
-      setInfoOpen(atStart);
-      setInquireOpen(atStart);
+    const unprintCurrent = async () => {
+      const printer = printerRef.current;
+      if (!printer || !current) {
+        setSlides([]);
+        return;
+      }
+      setSlides([current]);
+      for (let i = 0; i < UNPRINT.length; i += 1) {
+        if (!leavingRef.current) return;
+        const progress = UNPRINT[i];
+        const bitmap =
+          printer.peek(current.url, progress, 0) ??
+          (await printer.print(current.url, progress, 0, true));
+        if (bitmap) {
+          setSlides([{ id: current.id, url: current.url, bitmap }]);
+        }
+        await wait(UNPRINT_MS[Math.min(i, UNPRINT_MS.length - 1)]);
+      }
+      setSlides([]);
     };
 
-    // Vertical wheel and trackpad gestures drive the sideways gallery.
-    const onWheel = (event: WheelEvent) => {
-      if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
-      event.preventDefault();
-      gallery.scrollLeft += event.deltaY;
+    setShowLogo(false);
+    setHeaderLabel(true);
+    setCollapsed(false);
+
+    const after = (ms: number, run: () => void) => {
+      morphTimersRef.current.push(window.setTimeout(run, ms));
     };
 
-    gallery.addEventListener("scroll", onScroll, { passive: true });
-    gallery.addEventListener("wheel", onWheel, { passive: false });
+    const total = allPartners.length;
+    for (let i = 0; i < total; i += 1) {
+      after(ITEM_STAGGER_MS * (i + 1), () => setListVisible(i + 1));
+    }
 
-    return () => {
-      gallery.removeEventListener("scroll", onScroll);
-      gallery.removeEventListener("wheel", onWheel);
-    };
-  }, []);
+    const doneAt = Math.max(ITEM_STAGGER_MS * total + HEADER_OFF_MS, MORPH_MS);
+    void (async () => {
+      await Promise.all([unprintCurrent(), wait(doneAt)]);
+      if (leavingRef.current) router.push("/");
+    })();
+  };
+
+  useEffect(
+    () => () => {
+      morphTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    },
+    [],
+  );
+
+  const homeContent = leaving;
 
   return (
     <div className="relative h-[100svh] overflow-hidden bg-cream">
-      {/* Full-bleed gallery, scrolling sideways */}
-      <div
-        ref={galleryRef}
-        className="scroll-hidden absolute inset-0 z-0 flex overflow-x-auto overflow-y-hidden overscroll-x-contain"
+      <button
+        type="button"
+        aria-label="Next image"
+        onClick={() => {
+          if (leaving) return;
+          setDetailOpen(false);
+          advanceRef.current();
+        }}
+        className="absolute inset-0 z-0 block cursor-pointer bg-cream"
       >
-        {partner.images.map((src, index) => (
-          <div
-            key={`${src}-${index}`}
-            className="relative h-full w-screen shrink-0"
-          >
-            {index === 0 ? (
-              // eslint-disable-next-line @next/next/no-img-element -- snap on after WebGL, no fade-in
-              <img
-                src={src}
-                alt={`${partner.name} 1`}
-                className="absolute inset-0 h-full w-full object-cover"
-              />
-            ) : (
-              <Image
-                src={src}
-                alt={`${partner.name} ${index + 1}`}
-                fill
-                className="object-cover"
-                sizes="100vw"
-              />
-            )}
-          </div>
-        ))}
-      </div>
+        <span className="sr-only">Next image</span>
+        <span className="pointer-events-none absolute inset-0 isolate" aria-hidden>
+          {slides.map((slide) => (
+            <span
+              key={slide.id}
+              className="absolute inset-0 block overflow-hidden"
+              style={{ mixBlendMode: "darken" }}
+            >
+              <SlideCanvas bitmap={slide.bitmap} />
+            </span>
+          ))}
+        </span>
+      </button>
 
-      {/* Independently-scrolling left column, arriving along Z */}
-      <div
-        className="pointer-events-none absolute inset-0 z-20"
-        style={{ perspective: "1100px" }}
-      >
-        <aside
-          className="pointer-events-none absolute top-0 left-0 flex h-full max-h-full w-full max-w-[375px] flex-col px-5 py-5"
-          style={{
-            transform: entered
-              ? "translate3d(0px, 0px, 0px)"
-              : "translate3d(0px, 8px, -520px)",
-            opacity: entered ? 1 : 0,
-            transition: `transform ${ENTER_MS}ms ${ENTER_EASE}, opacity ${Math.round(
-              ENTER_MS * 0.6,
-            )}ms ease-out`,
-            willChange: "transform",
-          }}
-        >
-          <div className="pointer-events-auto flex max-h-full flex-col gap-5 overflow-y-auto overscroll-none">
-            <div className="relative h-[138px] w-[335px] shrink-0 border-[0.75px] border-ink bg-cream">
-              <CloseButton className="absolute top-[-0.5px] right-[-0.5px] md:fixed md:top-5 md:right-5" />
-              <div
-                className={`absolute left-1/2 top-1/2 h-[88px] w-[215px] -translate-x-1/2 -translate-y-1/2 mix-blend-multiply ${
-                  reveal >= 1 ? "opacity-100" : "opacity-0"
-                }`}
-              >
-                <div className="relative h-full w-full rotate-[4.87deg]">
-                  <Image
-                    src={partner.stampLogo}
-                    alt={partner.name}
-                    fill
-                    className="object-contain"
-                    sizes="215px"
-                    priority
-                  />
-                </div>
-              </div>
+      <div className="pointer-events-none absolute inset-0 z-20">
+        <aside className="pointer-events-none absolute top-0 left-0 flex h-full max-h-full w-full max-w-[375px] flex-col px-5 py-5 max-[599px]:max-w-none">
+          <div className="pointer-events-auto flex max-h-full flex-col gap-[5px] overflow-y-auto overscroll-none">
+            <div className="shrink-0">
+              <AddressBox
+                collapsed={collapsed}
+                href="/"
+                onBack={handleBack}
+              />
             </div>
 
-            <div
-              className={`relative flex w-[335px] shrink-0 flex-col overflow-hidden border-[0.75px] border-ink bg-cream ${
-                infoOpen ? "h-[138px]" : "h-10"
-              }`}
-            >
-              <button
-                type="button"
-                onClick={() => setInfoOpen((open) => !open)}
-                className="flex h-10 w-full shrink-0 cursor-pointer items-center justify-center border-b-[0.75px] border-ink bg-cream text-[12px] uppercase tracking-[0.02em]"
-                style={{ cursor: "pointer" }}
-              >
-                <span className={reveal >= 2 ? "opacity-100" : "opacity-0"}>
-                  Information
-                </span>
-              </button>
-              <p
-                className={`px-4 py-3 text-[12px] leading-normal ${
-                  reveal >= 3 ? "opacity-100" : "opacity-0"
-                }`}
-              >
-                {partner.description}
-              </p>
+            <div className="shrink-0">
+              <PartnersList
+                partners={allPartners}
+                collapsed={collapsed}
+                visibleCount={listVisible}
+                showHeaderLabel={headerLabel}
+                locked
+                logo={
+                  showLogo
+                    ? { src: partner.stampLogo, alt: partner.name }
+                    : null
+                }
+                onLogoClick={
+                  showLogo && !leaving
+                    ? () => setDetailOpen(true)
+                    : undefined
+                }
+              />
             </div>
 
-            <div
-              className={`flex w-[335px] shrink-0 flex-col overflow-hidden bg-cream ${
-                inquireOpen ? "h-[157px]" : "h-10"
-              }`}
-            >
-              <button
-                type="button"
-                onClick={() => setInquireOpen((open) => !open)}
-                className="relative -mb-px flex h-10 w-full shrink-0 cursor-pointer items-center justify-center border-[0.75px] border-ink bg-cream text-[12px] uppercase tracking-[0.02em]"
-                style={{ cursor: "pointer" }}
-              >
-                <span className={reveal >= 4 ? "opacity-100" : "opacity-0"}>
-                  Inquire
-                </span>
-              </button>
-              <Link
-                href={partner.links.wholesale}
-                className={`relative -mb-px flex h-10 items-center border-[0.75px] border-ink bg-cream px-4 text-[12px] uppercase tracking-[0.02em] ${
-                  reveal >= 5 ? "" : "pointer-events-none"
-                }`}
-              >
-                <span className={reveal >= 5 ? "opacity-100" : "opacity-0"}>
-                  Wholesale
-                </span>
-              </Link>
-              <a
-                href={partner.links.instagram}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={`relative -mb-px flex h-10 items-center border-[0.75px] border-ink bg-cream px-4 text-[12px] uppercase tracking-[0.02em] ${
-                  reveal >= 6 ? "" : "pointer-events-none"
-                }`}
-              >
-                <span className={reveal >= 6 ? "opacity-100" : "opacity-0"}>
-                  Instagram
-                </span>
-              </a>
-              <a
-                href={partner.links.website}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={`relative flex h-10 items-center border-[0.75px] border-ink bg-cream px-4 text-[12px] uppercase tracking-[0.02em] ${
-                  reveal >= 7 ? "" : "pointer-events-none"
-                }`}
-              >
-                <span className={reveal >= 7 ? "opacity-100" : "opacity-0"}>
-                  Website
-                </span>
-              </a>
+            <div className="shrink-0">
+              <InfoBox
+                body={
+                  homeContent ? site.information : partner.description
+                }
+                open={detailOpen}
+                onOpenChange={setDetailOpen}
+              />
+            </div>
+
+            <div className="shrink-0">
+              <ContactLinks
+                title={homeContent ? "CONTACT" : "INQUIRE"}
+                rows={
+                  homeContent
+                    ? undefined
+                    : partnerContactRows(partner.links)
+                }
+                open={detailOpen}
+                onOpenChange={setDetailOpen}
+              />
             </div>
           </div>
         </aside>

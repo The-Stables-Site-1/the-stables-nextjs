@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { StampClicks } from "@/components/StampClicks";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -15,6 +16,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full">
       <body className="min-h-full bg-cream font-sans text-black antialiased">
+        <StampClicks />
         {children}
       </body>
     </html>

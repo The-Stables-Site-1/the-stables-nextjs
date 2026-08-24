@@ -5,9 +5,16 @@
 
 export const CREAM_RGB = [250 / 255, 246 / 255, 233 / 255] as const;
 
-const MAX_TEX = 768;
-const MAX_CANVAS_W = 960;
-const MAX_CANVAS_H = 540;
+/** Frame ladders shared by the home plates and the partner slideshow. */
+export const PRINT_IN = [0.14, 0.32, 0.5, 0.72, 1] as const;
+export const PRINT_IN_MS = [28, 64, 38, 72, 42] as const;
+export const UNPRINT = [0.68, 0.4, 0.18, 0] as const;
+export const UNPRINT_MS = [36, 52, 28, 40] as const;
+
+const MAX_TEX = 1280;
+const MAX_CANVAS_W = 1600;
+const MAX_CANVAS_H = 1000;
+const DPR_CAP = 1.25;
 const MAX_ANIM_FRAMES = 52;
 const MAX_ANIM_MS = 110;
 const SETTLE = 0.01;
@@ -37,6 +44,7 @@ const FRAG = /* glsl */ `
   uniform float uHasB;
   uniform float uDir;
   uniform float uColor;
+  uniform float uInkAlpha;
 
   varying vec2 vUv;
 
@@ -45,6 +53,10 @@ const FRAG = /* glsl */ `
 
   float hash(vec2 p) {
     return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
+  }
+
+  float hash3(vec2 p) {
+    return fract(sin(dot(p, vec2(269.5, 183.3))) * 331.319);
   }
 
   vec2 coverUv(vec2 uv, vec2 res, vec2 texSize) {
@@ -67,7 +79,7 @@ const FRAG = /* glsl */ `
       return 1.0;
     }
     float luma = dot(texture2D(tex, cuv).rgb, vec3(0.299, 0.587, 0.114));
-    return clamp((luma - 0.48) * 1.55 + 0.5, 0.0, 1.0);
+    return clamp((luma - 0.04) * 1.12, 0.0, 1.0);
   }
 
   vec3 photo(sampler2D tex, vec2 uv, vec2 res, vec2 texSize) {
@@ -79,17 +91,29 @@ const FRAG = /* glsl */ `
   }
 
   float inkFrom(float luma, float n) {
-    float ink = (1.0 - luma) * 0.94;
-    ink *= 0.84 + n * 0.22;
-    if (n < 0.035) ink = 0.0;
+    float ink = clamp(1.0 - luma, 0.0, 1.0);
+    ink *= mix(0.96, 1.05, n);
+    if (n < 0.01) ink = 0.0;
     return ink;
   }
 
-  float stamp(vec2 local, float ink) {
-    float radius = ink * 0.5;
-    if (radius < 0.02) return 0.0;
-    float d = length(local * vec2(1.0, 1.08));
-    return step(d, radius);
+  float stamp(vec2 local, float ink, float n, float n2) {
+    float radius = ink * mix(0.48, 0.54, n);
+    if (radius < 0.012) return 0.0;
+    vec2 warped = local * vec2(0.98 + n * 0.06, 1.04 - n2 * 0.05);
+    warped += (vec2(n2, n) - 0.5) * 0.016;
+    float d = length(warped);
+    float rim = (hash(local * 16.0 + n * 5.0) - 0.5) * 0.028;
+    return smoothstep(radius + 0.02 + rim, radius - 0.022 + rim, d);
+  }
+
+  float wear(vec2 frag, float n, float mark) {
+    if (mark < 0.001) return 0.0;
+    float speck = hash(floor(frag) + n);
+    float grit = hash(frag * 1.81 + 9.1);
+    float holes = step(0.025, speck);
+    float thin = mix(0.92, 1.0, grit);
+    return mark * holes * mix(thin, 1.0, smoothstep(0.55, 0.95, mark));
   }
 
   void main() {
@@ -99,16 +123,17 @@ const FRAG = /* glsl */ `
       return;
     }
 
-    float a = uHasA > 0.5 ? plate(uTexA, vUv, uRes, uSizeA) : 1.0;
-    float b = uHasB > 0.5 ? plate(uTexB, vUv, uRes, uSizeB) : 1.0;
+    float aPix = uHasA > 0.5 ? plate(uTexA, vUv, uRes, uSizeA) : 1.0;
+    float bPix = uHasB > 0.5 ? plate(uTexB, vUv, uRes, uSizeB) : 1.0;
 
-    float cellPx = 2.75;
+    float cellPx = 1.55;
     vec2 grid = gl_FragCoord.xy / cellPx;
     vec2 cell = floor(grid);
     vec2 local = fract(grid) - 0.5;
     float n = hash(cell);
     float n2 = hash(cell + vec2(19.1, 7.7));
-    float n3 = hash(cell + vec2(3.3, 31.9));
+    float n3 = hash3(cell + vec2(3.3, 31.9));
+    vec2 cellUv = (cell + 0.5) * cellPx / uRes;
 
     float along = uDir > 0.0 ? (1.0 - vUv.y) : vUv.y;
     // Discrete choppy passes, then a long tail of late stragglers.
@@ -124,17 +149,20 @@ const FRAG = /* glsl */ `
     float lifted = step(liftAt, uProgress);
     float stamped = step(stampAt, uProgress);
 
-    vec2 localA = local + (vec2(n, n2) - 0.5) * 0.08;
-    vec2 localB = local + (vec2(n2, n3) - 0.5) * 0.18;
+    float a = mix(aPix, uHasA > 0.5 ? plate(uTexA, cellUv, uRes, uSizeA) : 1.0, 0.35);
+    float b = mix(bPix, uHasB > 0.5 ? plate(uTexB, cellUv, uRes, uSizeB) : 1.0, 0.35);
+
+    vec2 localA = local + (vec2(n, n2) - 0.5) * 0.04;
+    vec2 localB = local + (vec2(n2, n3) - 0.5) * 0.1;
 
     float inkA = inkFrom(a, n);
     float inkB = inkFrom(b, n);
-    if (n3 < 0.045) inkB = 0.0;
-    if (n2 > 0.94) inkB *= 1.2;
+    if (n3 < 0.02) inkB = 0.0;
+    if (n2 > 0.97) inkB *= 1.08;
 
-    float markA = stamp(localA, inkA);
-    float markB = stamp(localB, inkB);
-    float ghost = step(0.9, n) * stamp(localB + vec2(0.2, -0.14), inkB * 0.55);
+    float markA = stamp(localA, inkA, n, n2);
+    float markB = stamp(localB, inkB, n2, n3);
+    float ghost = step(0.88, n) * stamp(localB + vec2(0.18, -0.12), inkB * 0.5, n3, n);
 
     float printed;
     if (uHasB < 0.5) {
@@ -146,12 +174,21 @@ const FRAG = /* glsl */ `
         max(markB * stamped, ghost * stamped)
       );
     }
+    printed = wear(gl_FragCoord.xy, n, printed);
+    float tone = 1.0 - aPix;
+    float dither = hash(gl_FragCoord.xy + n);
+    float fine = step(dither, tone);
+    printed = mix(printed, max(printed, fine), 0.22 * stamped);
 
-    float grain = (hash(gl_FragCoord.xy * 0.37) - 0.5) * 0.03;
+    float grain = (hash(gl_FragCoord.xy * 0.37) - 0.5) * 0.02;
     vec3 paper = CREAM + grain;
     vec3 screen = mix(paper, INK, printed);
     vec3 live = uHasA > 0.5 ? photo(uTexA, vUv, uRes, uSizeA) : CREAM;
     float developed = step(0.001, uColor) * step(stampAt, uColor);
+    if (uInkAlpha > 0.5) {
+      gl_FragColor = vec4(INK, printed);
+      return;
+    }
     gl_FragColor = vec4(developed > 0.5 ? live : screen, 1.0);
   }
 `;
@@ -196,13 +233,16 @@ function compile(
 }
 
 function fitCanvas(canvas: HTMLCanvasElement) {
+  const dpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
+  const cssW = Math.max(1, window.innerWidth);
+  const cssH = Math.max(1, window.innerHeight);
   const scale = Math.min(
     1,
-    MAX_CANVAS_W / Math.max(window.innerWidth, 1),
-    MAX_CANVAS_H / Math.max(window.innerHeight, 1),
+    MAX_CANVAS_W / (cssW * dpr),
+    MAX_CANVAS_H / (cssH * dpr),
   );
-  const w = Math.max(1, Math.floor(window.innerWidth * scale));
-  const h = Math.max(1, Math.floor(window.innerHeight * scale));
+  const w = Math.max(1, Math.floor(cssW * dpr * scale));
+  const h = Math.max(1, Math.floor(cssH * dpr * scale));
   if (canvas.width === w && canvas.height === h) return false;
   canvas.width = w;
   canvas.height = h;
@@ -303,6 +343,7 @@ export function createSilkscreenEngine(
     uHasB: gl.getUniformLocation(program, "uHasB"),
     uDir: gl.getUniformLocation(program, "uDir"),
     uColor: gl.getUniformLocation(program, "uColor"),
+    uInkAlpha: gl.getUniformLocation(program, "uInkAlpha"),
   };
 
   const scratch = document.createElement("canvas");
@@ -388,6 +429,7 @@ export function createSilkscreenEngine(
     gl.uniform1f(loc.uHasB, hasB);
     gl.uniform1f(loc.uDir, dir);
     gl.uniform1f(loc.uColor, colorProgress);
+    gl.uniform1f(loc.uInkAlpha, 0);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texA ?? empty);
     gl.activeTexture(gl.TEXTURE1);
@@ -727,4 +769,252 @@ export function createSilkscreenEngine(
       gl.getExtension("WEBGL_lose_context")?.loseContext();
     },
   };
+}
+
+export type SilkscreenPrinter = {
+  peek: (
+    url: string,
+    progress?: number,
+    color?: number,
+  ) => ImageBitmap | null;
+  print: (
+    url: string,
+    progress?: number,
+    color?: number,
+    urgent?: boolean,
+  ) => Promise<ImageBitmap | null>;
+  dispose: () => void;
+};
+
+function frameKey(url: string, progress: number, color: number) {
+  return `${url}|${progress.toFixed(2)}|${color.toFixed(2)}`;
+}
+
+/** One hidden context that stamps a still halftone frame for stacked hover plates. */
+export function createSilkscreenPrinter(): SilkscreenPrinter | null {
+  const canvas = document.createElement("canvas");
+  const gl = canvas.getContext("webgl", {
+    alpha: true,
+    antialias: false,
+    depth: false,
+    stencil: false,
+    powerPreference: "low-power",
+    preserveDrawingBuffer: true,
+    premultipliedAlpha: true,
+    failIfMajorPerformanceCaveat: false,
+  });
+  if (!gl) return null;
+
+  const vs = compile(gl, gl.VERTEX_SHADER, VERT);
+  const fs = compile(gl, gl.FRAGMENT_SHADER, FRAG);
+  if (!vs || !fs) return null;
+
+  const program = gl.createProgram();
+  if (!program) return null;
+  gl.attachShader(program, vs);
+  gl.attachShader(program, fs);
+  gl.linkProgram(program);
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) return null;
+  gl.useProgram(program);
+
+  const buf = gl.createBuffer();
+  if (!buf) return null;
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(
+    gl.ARRAY_BUFFER,
+    new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]),
+    gl.STATIC_DRAW,
+  );
+  const aPos = gl.getAttribLocation(program, "aPos");
+  gl.enableVertexAttribArray(aPos);
+  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+  const loc = {
+    uTexA: gl.getUniformLocation(program, "uTexA"),
+    uTexB: gl.getUniformLocation(program, "uTexB"),
+    uProgress: gl.getUniformLocation(program, "uProgress"),
+    uRes: gl.getUniformLocation(program, "uRes"),
+    uSizeA: gl.getUniformLocation(program, "uSizeA"),
+    uSizeB: gl.getUniformLocation(program, "uSizeB"),
+    uHasA: gl.getUniformLocation(program, "uHasA"),
+    uHasB: gl.getUniformLocation(program, "uHasB"),
+    uDir: gl.getUniformLocation(program, "uDir"),
+    uColor: gl.getUniformLocation(program, "uColor"),
+    uInkAlpha: gl.getUniformLocation(program, "uInkAlpha"),
+  };
+
+  const scratch = document.createElement("canvas");
+  const empty = gl.createTexture();
+  if (empty) {
+    gl.bindTexture(gl.TEXTURE_2D, empty);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      gl.RGB,
+      1,
+      1,
+      0,
+      gl.RGB,
+      gl.UNSIGNED_BYTE,
+      new Uint8Array([250, 246, 233]),
+    );
+  }
+
+  let disposed = false;
+  const cache = new Map<string, ImageBitmap>();
+  const inflight = new Map<string, Promise<ImageBitmap | null>>();
+  const textures = new Map<
+    string,
+    { tex: WebGLTexture; w: number; h: number }
+  >();
+  const urgent: Array<() => Promise<void>> = [];
+  const background: Array<() => Promise<void>> = [];
+  let pumping = false;
+
+  const paint = (
+    tex: WebGLTexture,
+    w: number,
+    h: number,
+    progress: number,
+    color: number,
+  ) => {
+    const ink = color < 0.001;
+    gl.viewport(0, 0, canvas.width, canvas.height);
+    if (ink) gl.clearColor(0, 0, 0, 0);
+    else gl.clearColor(CREAM_RGB[0], CREAM_RGB[1], CREAM_RGB[2], 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.uniform1i(loc.uTexA, 0);
+    gl.uniform1i(loc.uTexB, 1);
+    gl.uniform1f(loc.uProgress, progress);
+    gl.uniform2f(loc.uRes, canvas.width, canvas.height);
+    gl.uniform2f(loc.uSizeA, w, h);
+    gl.uniform2f(loc.uSizeB, 1, 1);
+    gl.uniform1f(loc.uHasA, 1);
+    gl.uniform1f(loc.uHasB, 0);
+    gl.uniform1f(loc.uDir, 1);
+    gl.uniform1f(loc.uColor, color);
+    gl.uniform1f(loc.uInkAlpha, ink ? 1 : 0);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_2D, empty);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  };
+
+  const snapshot = async (): Promise<ImageBitmap | null> => {
+    try {
+      return await createImageBitmap(canvas);
+    } catch {
+      return null;
+    }
+  };
+
+  const getTexture = async (url: string) => {
+    const hit = textures.get(url);
+    if (hit) return hit;
+    const img = await loadImage(url);
+    if (disposed) return null;
+    const uploaded = uploadTexture(gl, scratch, img);
+    if (!uploaded) return null;
+    const entry = { tex: uploaded.tex, w: uploaded.w, h: uploaded.h };
+    textures.set(url, entry);
+    return entry;
+  };
+
+  const actuallyPrint = async (
+    url: string,
+    progress: number,
+    color: number,
+  ): Promise<ImageBitmap | null> => {
+    if (disposed) return null;
+    fitCanvas(canvas);
+    try {
+      const tex = await getTexture(url);
+      if (!tex || disposed) return null;
+      paint(tex.tex, tex.w, tex.h, progress, color);
+      return await snapshot();
+    } catch {
+      return null;
+    }
+  };
+
+  const pump = () => {
+    if (pumping || disposed) return;
+    const task = urgent.shift() ?? background.shift();
+    if (!task) return;
+    pumping = true;
+    void task().finally(() => {
+      pumping = false;
+      pump();
+    });
+  };
+
+  return {
+    peek(url, progress = 1, color = 0) {
+      return cache.get(frameKey(url, progress, color)) ?? null;
+    },
+    print(url, progress = 1, color = 0, urgentJob = false) {
+      if (disposed) return Promise.resolve(null);
+      const key = frameKey(url, progress, color);
+      const hit = cache.get(key);
+      if (hit) return Promise.resolve(hit);
+      const pending = inflight.get(key);
+      if (pending) return pending;
+      const job = new Promise<ImageBitmap | null>((resolve) => {
+        const run = async () => {
+          const src = await actuallyPrint(url, progress, color);
+          if (src) cache.set(key, src);
+          resolve(src);
+        };
+        if (urgentJob) urgent.push(run);
+        else background.push(run);
+        pump();
+      });
+      inflight.set(key, job);
+      void job.finally(() => inflight.delete(key));
+      return job;
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      urgent.length = 0;
+      background.length = 0;
+      cache.forEach((bitmap) => bitmap.close());
+      cache.clear();
+      inflight.clear();
+      textures.forEach((entry) => gl.deleteTexture(entry.tex));
+      textures.clear();
+      if (empty) gl.deleteTexture(empty);
+      gl.deleteBuffer(buf);
+      gl.deleteProgram(program);
+      gl.deleteShader(vs);
+      gl.deleteShader(fs);
+      scratch.width = 1;
+      scratch.height = 1;
+      gl.getExtension("WEBGL_lose_context")?.loseContext();
+    },
+  };
+}
+
+let sharedPrinter: SilkscreenPrinter | null | undefined;
+
+/** One printer for the whole session so home and partner pages share cached frames. */
+export function getSilkscreenPrinter(): SilkscreenPrinter | null {
+  if (typeof document === "undefined") return null;
+  if (sharedPrinter !== undefined) return sharedPrinter;
+  sharedPrinter = createSilkscreenPrinter();
+  return sharedPrinter;
+}
+
+/** Latest cached print of this image, preferring a finished plate. */
+export function peekPrinted(url: string): ImageBitmap | null {
+  const printer = getSilkscreenPrinter();
+  if (!printer) return null;
+  for (let i = PRINT_IN.length - 1; i >= 0; i -= 1) {
+    const hit = printer.peek(url, PRINT_IN[i], 0);
+    if (hit) return hit;
+  }
+  return printer.peek(url, 1, 0);
 }

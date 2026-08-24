@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { BOX_BORDER, MORPH_EASE, MORPH_MS, ROW_H, STAMP_BOX_H } from "@/lib/morph";
 
 type InfoBoxProps = {
   title?: string;
@@ -8,6 +9,8 @@ type InfoBoxProps = {
   showTitle?: boolean;
   showBody?: boolean;
   opaque?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
 export function InfoBox({
@@ -16,21 +19,32 @@ export function InfoBox({
   showTitle = true,
   showBody = true,
   opaque = false,
+  open,
+  onOpenChange,
 }: InfoBoxProps) {
-  const [open, setOpen] = useState(true);
+  const [uncontrolled, setUncontrolled] = useState(true);
+  const isOpen = open ?? uncontrolled;
+  const setOpen = (next: boolean) => {
+    onOpenChange?.(next);
+    if (open === undefined) setUncontrolled(next);
+  };
 
   return (
     <div
-      className={`relative flex w-[335px] flex-col overflow-hidden border-[0.75px] border-ink ${
+      className={`relative flex w-[335px] flex-col overflow-hidden border-[0.75px] border-ink max-[599px]:w-full ${
         opaque ? "bg-cream" : "bg-cream"
-      } ${open ? "h-[138px]" : "h-10"}`}
+      }`}
+      style={{
+        height: isOpen ? STAMP_BOX_H : ROW_H + BOX_BORDER,
+        transition: `height ${MORPH_MS}ms ${MORPH_EASE}`,
+      }}
     >
       <button
         type="button"
-        aria-expanded={open}
-        onClick={() => setOpen((current) => !current)}
+        aria-expanded={isOpen}
+        onClick={() => setOpen(!isOpen)}
         className={`flex h-10 w-full shrink-0 cursor-pointer items-center justify-center ${
-          open ? "border-b-[0.75px] border-ink" : ""
+          isOpen ? "border-b-[0.75px] border-ink" : ""
         }`}
         style={{ cursor: "pointer" }}
       >
