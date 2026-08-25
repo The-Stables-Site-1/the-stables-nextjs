@@ -178,10 +178,10 @@ export function PartnersList({
           className="absolute inset-0 cursor-pointer mix-blend-multiply"
           style={{ pointerEvents: "auto" }}
         >
-          <StampBox src={logo.src} alt="" blend={false} />
+          <StampBox src={logo.src} alt="" blend={false} seed={logo.alt} />
         </button>
       ) : logo ? (
-        <StampBox src={logo.src} alt={logo.alt} />
+        <StampBox src={logo.src} alt={logo.alt} seed={logo.alt} />
       ) : null}
     </div>
   );

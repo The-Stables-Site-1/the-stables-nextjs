@@ -45,6 +45,7 @@ const FRAG = /* glsl */ `
   uniform float uDir;
   uniform float uColor;
   uniform float uInkAlpha;
+  uniform float uContain;
 
   varying vec2 vUv;
 
@@ -59,11 +60,19 @@ const FRAG = /* glsl */ `
     return fract(sin(dot(p, vec2(269.5, 183.3))) * 331.319);
   }
 
-  vec2 coverUv(vec2 uv, vec2 res, vec2 texSize) {
+  vec2 fitUv(vec2 uv, vec2 res, vec2 texSize) {
     float screenAspect = res.x / max(res.y, 1.0);
     float texAspect = texSize.x / max(texSize.y, 1.0);
     vec2 scaled = uv;
-    if (screenAspect > texAspect) {
+    if (uContain > 0.5) {
+      if (screenAspect > texAspect) {
+        float s = screenAspect / texAspect;
+        scaled.x = (uv.x - 0.5) * s + 0.5;
+      } else {
+        float s = texAspect / screenAspect;
+        scaled.y = (uv.y - 0.5) * s + 0.5;
+      }
+    } else if (screenAspect > texAspect) {
       float s = texAspect / screenAspect;
       scaled.y = (uv.y - 0.5) * s + 0.5;
     } else {
@@ -74,7 +83,7 @@ const FRAG = /* glsl */ `
   }
 
   float plate(sampler2D tex, vec2 uv, vec2 res, vec2 texSize) {
-    vec2 cuv = coverUv(uv, res, texSize);
+    vec2 cuv = fitUv(uv, res, texSize);
     if (cuv.x < 0.0 || cuv.x > 1.0 || cuv.y < 0.0 || cuv.y > 1.0) {
       return 1.0;
     }
@@ -83,7 +92,7 @@ const FRAG = /* glsl */ `
   }
 
   vec3 photo(sampler2D tex, vec2 uv, vec2 res, vec2 texSize) {
-    vec2 cuv = coverUv(uv, res, texSize);
+    vec2 cuv = fitUv(uv, res, texSize);
     if (cuv.x < 0.0 || cuv.x > 1.0 || cuv.y < 0.0 || cuv.y > 1.0) {
       return CREAM;
     }
@@ -275,6 +284,8 @@ function uploadTexture(
   scratch.height = h;
   const ctx = scratch.getContext("2d", { alpha: false });
   if (!ctx) return null;
+  ctx.fillStyle = "#faf6e9";
+  ctx.fillRect(0, 0, w, h);
   ctx.drawImage(img, 0, 0, w, h);
 
   const tex = gl.createTexture();
@@ -344,6 +355,7 @@ export function createSilkscreenEngine(
     uDir: gl.getUniformLocation(program, "uDir"),
     uColor: gl.getUniformLocation(program, "uColor"),
     uInkAlpha: gl.getUniformLocation(program, "uInkAlpha"),
+    uContain: gl.getUniformLocation(program, "uContain"),
   };
 
   const scratch = document.createElement("canvas");
@@ -430,6 +442,7 @@ export function createSilkscreenEngine(
     gl.uniform1f(loc.uDir, dir);
     gl.uniform1f(loc.uColor, colorProgress);
     gl.uniform1f(loc.uInkAlpha, 0);
+    gl.uniform1f(loc.uContain, 0);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texA ?? empty);
     gl.activeTexture(gl.TEXTURE1);
@@ -783,11 +796,27 @@ export type SilkscreenPrinter = {
     color?: number,
     urgent?: boolean,
   ) => Promise<ImageBitmap | null>;
+  printStamp: (
+    url: string,
+    width: number,
+    height: number,
+    progress?: number,
+    urgent?: boolean,
+  ) => Promise<ImageBitmap | null>;
   dispose: () => void;
 };
 
 function frameKey(url: string, progress: number, color: number) {
   return `${url}|${progress.toFixed(2)}|${color.toFixed(2)}`;
+}
+
+function stampKey(
+  url: string,
+  width: number,
+  height: number,
+  progress: number,
+) {
+  return `stamp|${url}|${width}x${height}|${progress.toFixed(2)}`;
 }
 
 /** One hidden context that stamps a still halftone frame for stacked hover plates. */
@@ -841,6 +870,7 @@ export function createSilkscreenPrinter(): SilkscreenPrinter | null {
     uDir: gl.getUniformLocation(program, "uDir"),
     uColor: gl.getUniformLocation(program, "uColor"),
     uInkAlpha: gl.getUniformLocation(program, "uInkAlpha"),
+    uContain: gl.getUniformLocation(program, "uContain"),
   };
 
   const scratch = document.createElement("canvas");
@@ -879,6 +909,7 @@ export function createSilkscreenPrinter(): SilkscreenPrinter | null {
     h: number,
     progress: number,
     color: number,
+    contain = false,
   ) => {
     const ink = color < 0.001;
     gl.viewport(0, 0, canvas.width, canvas.height);
@@ -896,6 +927,7 @@ export function createSilkscreenPrinter(): SilkscreenPrinter | null {
     gl.uniform1f(loc.uDir, 1);
     gl.uniform1f(loc.uColor, color);
     gl.uniform1f(loc.uInkAlpha, ink ? 1 : 0);
+    gl.uniform1f(loc.uContain, contain ? 1 : 0);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.activeTexture(gl.TEXTURE1);
@@ -940,6 +972,51 @@ export function createSilkscreenPrinter(): SilkscreenPrinter | null {
     }
   };
 
+  const actuallyPrintStamp = async (
+    url: string,
+    width: number,
+    height: number,
+    progress: number,
+  ): Promise<ImageBitmap | null> => {
+    if (disposed) return null;
+    const w = Math.max(1, Math.min(800, Math.round(width)));
+    const h = Math.max(1, Math.min(400, Math.round(height)));
+    canvas.width = w;
+    canvas.height = h;
+    try {
+      const tex = await getTexture(url);
+      if (!tex || disposed) return null;
+      paint(tex.tex, tex.w, tex.h, progress, 0, true);
+      return await snapshot();
+    } catch {
+      return null;
+    }
+  };
+
+  const enqueue = (
+    key: string,
+    runPrint: () => Promise<ImageBitmap | null>,
+    urgentJob: boolean,
+  ) => {
+    const hit = cache.get(key);
+    if (hit) return Promise.resolve(hit);
+    const pending = inflight.get(key);
+    if (pending) return pending;
+    const job = new Promise<ImageBitmap | null>((resolve) => {
+      const run = async () => {
+        const src = await runPrint();
+        if (src) cache.set(key, src);
+        resolve(src);
+      };
+      if (urgentJob) urgent.push(run);
+      else background.push(run);
+      pump();
+    });
+    inflight.set(key, job);
+    void job.finally(() => inflight.delete(key));
+    return job;
+  };
+
   const pump = () => {
     if (pumping || disposed) return;
     const task = urgent.shift() ?? background.shift();
@@ -957,24 +1034,19 @@ export function createSilkscreenPrinter(): SilkscreenPrinter | null {
     },
     print(url, progress = 1, color = 0, urgentJob = false) {
       if (disposed) return Promise.resolve(null);
-      const key = frameKey(url, progress, color);
-      const hit = cache.get(key);
-      if (hit) return Promise.resolve(hit);
-      const pending = inflight.get(key);
-      if (pending) return pending;
-      const job = new Promise<ImageBitmap | null>((resolve) => {
-        const run = async () => {
-          const src = await actuallyPrint(url, progress, color);
-          if (src) cache.set(key, src);
-          resolve(src);
-        };
-        if (urgentJob) urgent.push(run);
-        else background.push(run);
-        pump();
-      });
-      inflight.set(key, job);
-      void job.finally(() => inflight.delete(key));
-      return job;
+      return enqueue(
+        frameKey(url, progress, color),
+        () => actuallyPrint(url, progress, color),
+        urgentJob,
+      );
+    },
+    printStamp(url, width, height, progress = 1, urgentJob = false) {
+      if (disposed) return Promise.resolve(null);
+      return enqueue(
+        stampKey(url, width, height, progress),
+        () => actuallyPrintStamp(url, width, height, progress),
+        urgentJob,
+      );
     },
     dispose() {
       if (disposed) return;

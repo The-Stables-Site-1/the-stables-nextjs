@@ -40,7 +40,7 @@ export const partners: Partner[] = [
     name: "Facile",
     description:
       "FACILE creates refined skincare and body care with a focus on everyday ritual and elevated essentials.",
-    stampLogo: PLACEHOLDER_LOGO,
+    stampLogo: "/partners/facile/logo.png",
     images: [
       "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/facile/hero.jpeg",
       "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/facile/gallery/02.jpeg",
@@ -48,23 +48,6 @@ export const partners: Partner[] = [
       "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/facile/gallery/04.jpeg",
       "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/facile/gallery/05.jpeg",
       "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/facile/gallery/06.jpeg",
-    ],
-    links: {
-      wholesale: "/contact",
-      instagram: "https://instagram.com/",
-      website: "#",
-    },
-  },
-  {
-    slug: "the-grey",
-    name: "The Grey",
-    description:
-      "THE GREY is a distinctive lifestyle and wellness brand built around quiet luxury and intentional living.",
-    stampLogo: PLACEHOLDER_LOGO,
-    images: [
-      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/the-grey/hero.jpeg",
-      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/the-grey/gallery/01.jpeg",
-      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/the-grey/gallery/02.jpeg",
     ],
     links: {
       wholesale: "/contact",
@@ -101,7 +84,7 @@ export const partners: Partner[] = [
     name: "Sky High Farm Goods",
     description:
       "SKY HIGH FARM GOODS brings farm-driven goods and regenerative agriculture into everyday beauty and lifestyle.",
-    stampLogo: PLACEHOLDER_LOGO,
+    stampLogo: "/partners/sky-high-farm-goods/logo.png",
     images: [
       "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/sky-high-farm-goods/hero.jpeg",
       "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/sky-high-farm-goods/gallery/01.jpeg",
@@ -119,11 +102,28 @@ export const partners: Partner[] = [
     },
   },
   {
+    slug: "the-grey",
+    name: "The Grey",
+    description:
+      "THE GREY is a distinctive lifestyle and wellness brand built around quiet luxury and intentional living.",
+    stampLogo: PLACEHOLDER_LOGO,
+    images: [
+      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/the-grey/hero.jpeg",
+      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/the-grey/gallery/01.jpeg",
+      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/the-grey/gallery/02.jpeg",
+    ],
+    links: {
+      wholesale: "/contact",
+      instagram: "https://instagram.com/",
+      website: "#",
+    },
+  },
+  {
     slug: "tsu-lange-yor",
     name: "Tsu Lange Yor",
     description:
       "TSU LANGE YOR is a distinctive fragrance and lifestyle brand with a singular aesthetic voice.",
-    stampLogo: PLACEHOLDER_LOGO,
+    stampLogo: "/partners/tsu-lange-yor/logo.png",
     images: [
       "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/tsu-lange-yor/hero.jpeg",
       "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/tsu-lange-yor/gallery/01.jpeg",
