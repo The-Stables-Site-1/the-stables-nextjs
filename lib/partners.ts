@@ -142,25 +142,6 @@ export const partners: Partner[] = [
     },
   },
   {
-    slug: "uniform",
-    name: "Uniform",
-    description:
-      "UNIFORM creates considered products for daily wear and ritual, with a focus on clarity and consistency.",
-    stampLogo: PLACEHOLDER_LOGO,
-    images: [
-      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/uniform/hero.jpeg",
-      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/uniform/gallery/01.jpeg",
-      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/uniform/gallery/02.jpeg",
-      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/uniform/gallery/03.jpeg",
-      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/uniform/gallery/04.jpeg",
-    ],
-    links: {
-      wholesale: "/contact",
-      instagram: "https://instagram.com/",
-      website: "#",
-    },
-  },
-  {
     slug: "vacation",
     name: "Vacation",
     description:
