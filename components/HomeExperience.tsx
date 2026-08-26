@@ -6,6 +6,7 @@ import { AddressBox } from "@/components/AddressBox";
 import { ContactLinks, partnerContactRows } from "@/components/ContactLinks";
 import { InfoBox } from "@/components/InfoBox";
 import { Loader } from "@/components/Loader";
+import { LogoStamp } from "@/components/LogoStamp";
 import { PartnersList } from "@/components/PartnersList";
 import { hasAppBooted, markAppBooted } from "@/lib/boot";
 import {
@@ -24,6 +25,11 @@ import {
   type SilkscreenPrinter,
 } from "@/lib/silkscreen-gl";
 import { site } from "@/lib/site";
+import {
+  planStampField,
+  type StampLogo,
+  type StampPlacement,
+} from "@/lib/stamp-field";
 
 type Phase = "loader" | "intro" | "ready";
 
@@ -36,14 +42,25 @@ const SHOW_HORSE_LOADER = false;
 
 const LINGER_MS = 150;
 const IDLE_MS = 4000;
-const CYCLE_MS = 1800;
 const MAX_PLATES = 8;
+
+/** Idle stamping cadence: one impression at a time, never lifted. */
+const STAMP_GAP_MS = 1500;
+/** Ceiling on accumulated impressions, so the page cannot grow forever. */
+const MAX_STAMPS = 48;
+
+const randomSeed = () => (Math.random() * 0xffffffff) >>> 0;
 
 type Plate = {
   id: number;
   slug: string;
   url: string;
   bitmap: ImageBitmap;
+};
+
+type StampInstance = {
+  id: number;
+  placement: StampPlacement;
 };
 
 function StampCanvas({ bitmap }: { bitmap: ImageBitmap }) {
@@ -84,6 +101,7 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
   const [headerLabel, setHeaderLabel] = useState(true);
   const [morphLogo, setMorphLogo] = useState(false);
   const [plates, setPlates] = useState<Plate[]>([]);
+  const [stamps, setStamps] = useState<StampInstance[]>([]);
   const currentPlateIdRef = useRef<number | null>(null);
   const nextPlateIdRef = useRef(1);
   const lingerTimersRef = useRef<Map<number, number>>(new Map());
@@ -95,9 +113,12 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
   const progressByIdRef = useRef<Map<number, number>>(new Map());
   const stopInRef = useRef(new Set<number>());
   const idleTimerRef = useRef(0);
-  const cycleTimerRef = useRef(0);
-  const cyclingRef = useRef(false);
-  const cycleIndexRef = useRef(0);
+  const stampTimerRef = useRef(0);
+  const stampRunRef = useRef(0);
+  const stampCountRef = useRef(0);
+  const nextStampIdRef = useRef(1);
+  const logosRef = useRef<StampLogo[]>([]);
+  const activeSlugRef = useRef<string | null>(null);
   const partnersRef = useRef(partners);
   const hoverRef = useRef<(slug: string | null) => void>(() => {});
   const stopIdleRef = useRef(() => {});
@@ -169,17 +190,43 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
   useEffect(() => {
     const printer = getSilkscreenPrinter();
     printerRef.current = printer;
+    if (!printer) return;
     for (const partner of partners) {
       const url = partner.images[0];
-      if (url) void printer?.print(url, PRINT_IN[0], 0);
+      if (url) void printer.print(url, PRINT_IN[0], 0);
     }
+
+    let alive = true;
+    const seen = new Set<string>();
+    void (async () => {
+      for (const partner of partners) {
+        if (!partner.stampLogo || seen.has(partner.stampLogo)) continue;
+        seen.add(partner.stampLogo);
+        const size = await printer.preload(partner.stampLogo);
+        if (!alive) return;
+        if (!size) continue;
+        logosRef.current = [
+          ...logosRef.current,
+          {
+            slug: partner.slug,
+            name: partner.name,
+            src: partner.stampLogo,
+            aspect: size.w / Math.max(size.h, 1),
+          },
+        ];
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
   }, [partners]);
 
   useEffect(
     () => () => {
       morphTimersRef.current.forEach((timer) => window.clearTimeout(timer));
       window.clearTimeout(idleTimerRef.current);
-      window.clearTimeout(cycleTimerRef.current);
+      window.clearTimeout(stampTimerRef.current);
       lingerTimersRef.current.forEach((timer) => window.clearTimeout(timer));
       lingerTimersRef.current.clear();
     },
@@ -309,52 +356,74 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
     })();
   };
 
-  const stopIdle = () => {
-    window.clearTimeout(idleTimerRef.current);
-    window.clearTimeout(cycleTimerRef.current);
-    idleTimerRef.current = 0;
-    cycleTimerRef.current = 0;
-    cyclingRef.current = false;
+  const clearStamps = () => {
+    stampCountRef.current = 0;
+    setStamps((current) => (current.length ? [] : current));
   };
 
-  const runCycleTick = () => {
-    if (!cyclingRef.current || lockedRef.current) return;
-    const list = partnersRef.current;
-    if (!list.length) return;
-    const index = cycleIndexRef.current;
-    hoverRef.current(list[index].slug);
-    if (index >= list.length - 1) {
-      cyclingRef.current = false;
-      cycleTimerRef.current = window.setTimeout(() => {
-        if (lockedRef.current) return;
-        hoverRef.current(null);
-        armIdle();
-      }, CYCLE_MS);
-      return;
-    }
-    cycleIndexRef.current = index + 1;
-    cycleTimerRef.current = window.setTimeout(runCycleTick, CYCLE_MS);
+  const stopIdle = () => {
+    window.clearTimeout(idleTimerRef.current);
+    window.clearTimeout(stampTimerRef.current);
+    idleTimerRef.current = 0;
+    stampTimerRef.current = 0;
+    stampRunRef.current += 1;
+    clearStamps();
+  };
+
+  /**
+   * Presses one logo at a time and leaves every impression on the page. When a
+   * layout runs out another is planned, so the sheet keeps filling up.
+   */
+  const runStampField = () => {
+    const run = stampRunRef.current;
+    const viewport = () => ({
+      logos: logosRef.current,
+      width: window.innerWidth,
+      height: window.innerHeight,
+      seed: randomSeed(),
+    });
+
+    let plan = planStampField(viewport());
+    if (!plan.length) return;
+    let index = 0;
+
+    const pressNext = () => {
+      if (stampRunRef.current !== run || lockedRef.current) return;
+      if (stampCountRef.current >= MAX_STAMPS) return;
+
+      if (index >= plan.length) {
+        plan = planStampField(viewport());
+        index = 0;
+        if (!plan.length) return;
+      }
+
+      const placement = plan[index];
+      index += 1;
+      const id = nextStampIdRef.current;
+      nextStampIdRef.current += 1;
+      stampCountRef.current += 1;
+      setStamps((current) => [...current, { id, placement }]);
+      stampTimerRef.current = window.setTimeout(pressNext, STAMP_GAP_MS);
+    };
+
+    pressNext();
   };
 
   const armIdle = () => {
     stopIdle();
-    if (lockedRef.current) return;
+    if (lockedRef.current || activeSlugRef.current) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const run = stampRunRef.current;
     idleTimerRef.current = window.setTimeout(() => {
-      cyclingRef.current = true;
-      cycleIndexRef.current = 0;
-      runCycleTick();
+      if (stampRunRef.current !== run || lockedRef.current) return;
+      runStampField();
     }, IDLE_MS);
   };
 
   const onPartnerHover = (slug: string | null) => {
-    if (slug) {
-      stopIdle();
-      handleHover(slug);
-      return;
-    }
-    handleHover(null);
-    if (!lockedRef.current) armIdle();
+    // Wipe the sheet on the spot; the idle effect re-arms once the hover ends.
+    if (slug) stopIdle();
+    handleHover(slug);
   };
 
   const handleSelect = (slug: string) => {
@@ -417,22 +486,25 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
     after(logoAt + LOGO_HOLD_MS, () => router.push(href));
   };
 
-  // Keep the idle cycle pointed at the latest handlers without restarting it.
+  // Keep the idle loop pointed at the latest handlers without restarting it.
   useEffect(() => {
     partnersRef.current = partners;
+    activeSlugRef.current = activeSlug;
     hoverRef.current = handleHover;
     stopIdleRef.current = stopIdle;
     armIdleRef.current = armIdle;
   });
 
+  // Hovering a partner is the only thing that wipes the sheet: it sets
+  // activeSlug, which tears the loop down here and restarts it on hover out.
   useEffect(() => {
     if (phase !== "ready" || locked) return;
     armIdleRef.current();
     return () => stopIdleRef.current();
-  }, [phase, locked]);
+  }, [phase, locked, activeSlug]);
 
   const interactive = !locked && phase !== "loader";
-  const hasPlates = plates.length > 0;
+  const hasPlates = plates.length > 0 || stamps.length > 0;
   const morphing = morphPartner != null;
 
   return (
@@ -451,6 +523,10 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
           >
             <StampCanvas bitmap={plate.bitmap} />
           </div>
+        ))}
+
+        {stamps.map((stamp) => (
+          <LogoStamp key={stamp.id} placement={stamp.placement} />
         ))}
       </div>
 
