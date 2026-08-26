@@ -56,23 +56,6 @@ export const partners: Partner[] = [
     },
   },
   {
-    slug: "the-grey",
-    name: "The Grey",
-    description:
-      "THE GREY is a distinctive lifestyle and wellness brand built around quiet luxury and intentional living.",
-    stampLogo: PLACEHOLDER_LOGO,
-    images: [
-      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/the-grey/hero.jpeg",
-      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/the-grey/gallery/01.jpeg",
-      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/the-grey/gallery/02.jpeg",
-    ],
-    links: {
-      wholesale: "/contact",
-      instagram: "https://instagram.com/",
-      website: "#",
-    },
-  },
-  {
     slug: "nature-of-things",
     name: "Nature of Things",
     description:
@@ -119,6 +102,23 @@ export const partners: Partner[] = [
     },
   },
   {
+    slug: "the-grey",
+    name: "The Grey",
+    description:
+      "THE GREY is a distinctive lifestyle and wellness brand built around quiet luxury and intentional living.",
+    stampLogo: PLACEHOLDER_LOGO,
+    images: [
+      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/the-grey/hero.jpeg",
+      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/the-grey/gallery/01.jpeg",
+      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/the-grey/gallery/02.jpeg",
+    ],
+    links: {
+      wholesale: "/contact",
+      instagram: "https://instagram.com/",
+      website: "#",
+    },
+  },
+  {
     slug: "tsu-lange-yor",
     name: "Tsu Lange Yor",
     description:
@@ -134,6 +134,25 @@ export const partners: Partner[] = [
       "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/tsu-lange-yor/gallery/06.jpeg",
       "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/tsu-lange-yor/gallery/07.jpeg",
       "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/tsu-lange-yor/gallery/08.jpeg",
+    ],
+    links: {
+      wholesale: "/contact",
+      instagram: "https://instagram.com/",
+      website: "#",
+    },
+  },
+  {
+    slug: "uniform",
+    name: "Uniform",
+    description:
+      "UNIFORM creates considered products for daily wear and ritual, with a focus on clarity and consistency.",
+    stampLogo: PLACEHOLDER_LOGO,
+    images: [
+      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/uniform/hero.jpeg",
+      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/uniform/gallery/01.jpeg",
+      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/uniform/gallery/02.jpeg",
+      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/uniform/gallery/03.jpeg",
+      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/uniform/gallery/04.jpeg",
     ],
     links: {
       wholesale: "/contact",
