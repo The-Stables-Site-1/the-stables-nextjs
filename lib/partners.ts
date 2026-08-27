@@ -142,24 +142,6 @@ export const partners: Partner[] = [
     },
   },
   {
-    slug: "vacation",
-    name: "Vacation",
-    description:
-      "VACATION is a sun-care and lifestyle brand built around leisure, nostalgia, and high-performance formulas.",
-    stampLogo: PLACEHOLDER_LOGO,
-    images: [
-      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/vacation/hero.jpeg",
-      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/vacation/gallery/02.jpeg",
-      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/vacation/gallery/03.jpeg",
-      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/vacation/gallery/04.jpeg",
-    ],
-    links: {
-      wholesale: "/contact",
-      instagram: "https://instagram.com/",
-      website: "#",
-    },
-  },
-  {
     slug: "zure-solaris",
     name: "Zure Solaris",
     description:
@@ -172,6 +154,24 @@ export const partners: Partner[] = [
       "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/zure-solaris/gallery/03.jpeg",
       "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/zure-solaris/gallery/04.jpeg",
       "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/zure-solaris/gallery/05.jpeg",
+    ],
+    links: {
+      wholesale: "/contact",
+      instagram: "https://instagram.com/",
+      website: "#",
+    },
+  },
+  {
+    slug: "vacation",
+    name: "Vacation",
+    description:
+      "VACATION is a sun-care and lifestyle brand built around leisure, nostalgia, and high-performance formulas.",
+    stampLogo: PLACEHOLDER_LOGO,
+    images: [
+      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/vacation/hero.jpeg",
+      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/vacation/gallery/02.jpeg",
+      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/vacation/gallery/03.jpeg",
+      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/vacation/gallery/04.jpeg",
     ],
     links: {
       wholesale: "/contact",
