@@ -278,10 +278,11 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
   }, [maxReveal]);
 
   const ready = phase === "ready";
-  const partnerStart = 7;
-  const infoTitleAt = partnerStart + partners.length;
+  const infoTitleAt = 6;
   const infoBodyAt = infoTitleAt + 1;
-  const contactStart = infoBodyAt + 1;
+  const partnerTitleAt = infoBodyAt + 1;
+  const partnerStart = partnerTitleAt + 1;
+  const contactStart = partnerStart + partners.length;
 
   const pushPlate = (plate: Plate) => {
     setPlates((current) => {
@@ -545,9 +546,18 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
           </div>
 
           <div>
+            <InfoBox
+              body={morphPartner ? morphPartner.description : site.information}
+              showTitle={reveal >= infoTitleAt}
+              showBody={reveal >= infoBodyAt}
+              opaque={ready || hasPlates}
+            />
+          </div>
+
+          <div>
             <PartnersList
               partners={partners}
-              showTitle={reveal >= 6}
+              showTitle={reveal >= partnerTitleAt}
               revealedCount={Math.max(0, reveal - (partnerStart - 1))}
               opaque={ready || hasPlates}
               activeSlug={activeSlug}
@@ -561,15 +571,6 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
                   ? { src: morphPartner.stampLogo, alt: morphPartner.name }
                   : null
               }
-            />
-          </div>
-
-          <div>
-            <InfoBox
-              body={morphPartner ? morphPartner.description : site.information}
-              showTitle={reveal >= infoTitleAt}
-              showBody={reveal >= infoBodyAt}
-              opaque={ready || hasPlates}
             />
           </div>
 
