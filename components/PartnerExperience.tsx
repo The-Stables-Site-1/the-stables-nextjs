@@ -14,6 +14,7 @@ import {
   MORPH_MS,
 } from "@/lib/morph";
 import { partners as allPartners, type Partner } from "@/lib/partners";
+import { disposeSilkscreenPrinter } from "@/lib/silkscreen-gl";
 import { site } from "@/lib/site";
 
 /** How long each frame holds before the next one fades in. */
@@ -88,6 +89,7 @@ export function PartnerExperience({ partner }: PartnerExperienceProps) {
   useEffect(
     () => () => {
       morphTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+      if (!leavingRef.current) disposeSilkscreenPrinter();
     },
     [],
   );
@@ -127,12 +129,23 @@ export function PartnerExperience({ partner }: PartnerExperienceProps) {
 
       <div className="pointer-events-none absolute inset-0 z-20">
         <aside className="pointer-events-none absolute top-0 left-0 flex h-full max-h-full w-full max-w-[375px] flex-col px-5 py-5 max-[599px]:max-w-none">
-          <div className="pointer-events-auto flex max-h-full flex-col gap-[5px] overflow-y-auto overscroll-none">
+          <div className="pointer-events-auto flex max-h-full flex-col gap-[6px] overflow-y-auto overscroll-none">
             <div className="shrink-0">
               <AddressBox
                 collapsed={collapsed}
                 href="/"
                 onBack={handleBack}
+              />
+            </div>
+
+            <div className="shrink-0">
+              <InfoBox
+                body={
+                  homeContent ? site.information : partner.description
+                }
+                moreHref={homeContent ? "/about" : undefined}
+                open={detailOpen}
+                onOpenChange={setDetailOpen}
               />
             </div>
 
@@ -153,16 +166,6 @@ export function PartnerExperience({ partner }: PartnerExperienceProps) {
                     ? () => setDetailOpen(true)
                     : undefined
                 }
-              />
-            </div>
-
-            <div className="shrink-0">
-              <InfoBox
-                body={
-                  homeContent ? site.information : partner.description
-                }
-                open={detailOpen}
-                onOpenChange={setDetailOpen}
               />
             </div>
 

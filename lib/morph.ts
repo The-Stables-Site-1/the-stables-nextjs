@@ -1,6 +1,7 @@
 /** Shared geometry and timing for the home-to-partner module morph. */
 export const STAMP_BOX_H = 138;
-export const ROW_H = 40;
+/** Header and boxed-row height: 40px minus 1px top and 3px bottom. */
+export const ROW_H = 36;
 /** Top + bottom 0.75px strokes; height is border-box so this must be included. */
 export const BOX_BORDER = 1.5;
 

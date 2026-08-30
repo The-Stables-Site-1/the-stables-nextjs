@@ -110,7 +110,7 @@ export function PartnersList({
             return !current;
           });
         }}
-        className={`flex h-10 w-full shrink-0 cursor-pointer items-center justify-center ${
+        className={`flex h-[36px] w-full shrink-0 cursor-pointer items-center justify-center ${
           open && showHeaderLabel ? "border-b-[0.75px] border-ink" : ""
         }`}
       >
@@ -131,7 +131,7 @@ export function PartnersList({
               <Link
                 href={`/partners/${partner.slug}`}
                 data-partner-slug={partner.slug}
-                className={`relative flex h-10 items-center px-4 text-[13px] text-black ${
+                className={`relative flex h-[36px] items-center px-4 text-[13px] text-black ${
                   index < shown - 1 ? "border-b-[0.75px] border-ink" : ""
                 } ${index < revealedCount ? "" : "pointer-events-none"}`}
                 onClick={(event) => {

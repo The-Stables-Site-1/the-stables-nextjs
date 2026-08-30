@@ -281,36 +281,37 @@ const STAMP_FRAG = /* glsl */ `
     float shape = smoothstep(0.42, 0.6, dil * force * 1.6);
     float interior = smoothstep(0.5, 0.95, dil);
 
-    // The plate pass halftone, laid straight over the ink.
+    // A light plate-pass screen. Dots overlap so interiors stay mostly solid
+    // and the grid only shows as a faint thinning of the ink.
     float cellPx = max(uGrain * 1.7, 1.2);
     vec2 grid = px / cellPx;
     vec2 cell = floor(grid);
     vec2 local = fract(grid) - 0.5;
     float cn = hash(cell + uSeed * 53.0);
     float cn2 = hash(cell + vec2(19.1, 7.7));
-    float tone = clamp(dil * mix(0.78, 1.14, field), 0.0, 1.0);
-    float radius = tone * mix(0.54, 0.7, cn);
-    vec2 dotUv = local * vec2(0.98 + cn * 0.06, 1.04 - cn2 * 0.05)
-               + (vec2(cn2, cn) - 0.5) * 0.03;
-    float screen = smoothstep(radius + 0.06, radius - 0.06, length(dotUv));
+    float tone = clamp(dil * mix(0.88, 1.12, field), 0.0, 1.0);
+    float radius = tone * mix(0.78, 0.98, cn);
+    vec2 dotUv = local * vec2(0.99 + cn * 0.03, 1.02 - cn2 * 0.03)
+               + (vec2(cn2, cn) - 0.5) * 0.016;
+    float dots = smoothstep(radius + 0.08, radius - 0.12, length(dotUv));
+    // Density variation only — the screen no longer punches holes in the die.
+    float screen = mix(0.9, 1.0, dots);
 
-    // Chunky ordered/random dither so the erosion breaks into flecks, not fuzz.
+    // Sparse flecks at the edges. Interiors stay filled so the mark reads as
+    // ink, not as a second halftone.
     vec2 gq = floor(px / max(uGrain, 0.5));
     float ord = fract(dot(gq, vec2(0.5, 0.25)) + 0.125);
     float d = mix(hash(gq + uSeed * 31.0), ord, 0.4);
-    float keep = clamp(mix(0.6, 1.18, field)
-                     * mix(0.72, 1.1, interior)
-                     * (0.55 + 0.55 * ease), 0.0, 1.0);
+    float keep = clamp(mix(0.9, 1.22, field)
+                     * mix(0.92, 1.14, interior)
+                     * (0.84 + 0.2 * ease), 0.0, 1.0);
     float grit = step(d, keep);
 
-    // Dry patches that fill in as the press lands, plus permanent worn pits.
-    grit *= step(0.26 - 0.24 * ease, vnoise(gp * 0.042 + 11.3));
-    grit *= step(0.04, hash(floor(px / max(uGrain * 2.4, 1.0)) + uSeed * 7.0));
+    grit *= step(0.1 - 0.08 * ease, vnoise(gp * 0.042 + 11.3));
+    grit *= step(0.018, hash(floor(px / max(uGrain * 2.4, 1.0)) + uSeed * 7.0));
 
-    // Full-strength ink. Density lives in the colour so the multiply blend does
-    // the work, instead of thin alpha washing the mark out to a haze.
-    float alpha = clamp(shape * grit * screen, 0.0, 1.0);
-    vec3 ink = clamp(uInk * mix(1.24, 0.84, field), 0.0, 1.0);
+    float alpha = clamp(shape * grit, 0.0, 1.0);
+    vec3 ink = clamp(uInk * mix(1.18, 0.9, field) * screen, 0.0, 1.0);
     gl_FragColor = vec4(ink * alpha, alpha);
   }
 `;
@@ -1226,8 +1227,13 @@ export function createSilkscreenPrinter(): SilkscreenPrinter | null {
     const job = new Promise<ImageBitmap | null>((resolve) => {
       const run = async () => {
         const src = await runPrint();
-        if (src) cache.set(key, src);
-        resolve(src);
+        if (src && !disposed) {
+          cache.set(key, src);
+          resolve(src);
+          return;
+        }
+        src?.close();
+        resolve(null);
       };
       if (urgentJob) urgent.push(run);
       else background.push(run);
@@ -1303,8 +1309,8 @@ export function createSilkscreenPrinter(): SilkscreenPrinter | null {
     dispose() {
       if (disposed) return;
       disposed = true;
-      urgent.length = 0;
-      background.length = 0;
+      const queued = [...urgent.splice(0), ...background.splice(0)];
+      queued.forEach((task) => void task());
       cache.forEach((bitmap) => bitmap.close());
       cache.clear();
       inflight.clear();
@@ -1332,6 +1338,12 @@ export function getSilkscreenPrinter(): SilkscreenPrinter | null {
   if (sharedPrinter !== undefined) return sharedPrinter;
   sharedPrinter = createSilkscreenPrinter();
   return sharedPrinter;
+}
+
+/** Releases cached bitmaps, textures, and the shared WebGL context. */
+export function disposeSilkscreenPrinter() {
+  sharedPrinter?.dispose();
+  sharedPrinter = undefined;
 }
 
 /** Latest cached print of this image, preferring a finished plate. */

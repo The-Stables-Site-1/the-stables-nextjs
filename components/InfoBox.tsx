@@ -1,14 +1,21 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { BOX_BORDER, MORPH_EASE, MORPH_MS, ROW_H, STAMP_BOX_H } from "@/lib/morph";
 
 type InfoBoxProps = {
   title?: string;
-  body?: string;
+  body?: string | readonly string[];
+  moreHref?: string;
+  moreLabel?: string;
   showTitle?: boolean;
   showBody?: boolean;
   opaque?: boolean;
+  /** Grow with the copy instead of clipping to the stamp-module height. */
+  fit?: boolean;
+  /** First-line indent on paragraphs after the first; no extra vertical gap. */
+  indent?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 };
@@ -16,9 +23,13 @@ type InfoBoxProps = {
 export function InfoBox({
   title = "INFORMATION",
   body,
+  moreHref,
+  moreLabel = "Read more.",
   showTitle = true,
   showBody = true,
   opaque = false,
+  fit = false,
+  indent = false,
   open,
   onOpenChange,
 }: InfoBoxProps) {
@@ -35,7 +46,11 @@ export function InfoBox({
         opaque ? "bg-cream" : "bg-cream"
       }`}
       style={{
-        height: isOpen ? STAMP_BOX_H : ROW_H + BOX_BORDER,
+        height: isOpen
+          ? fit
+            ? "auto"
+            : STAMP_BOX_H + (moreHref ? 20 : 0)
+          : ROW_H + BOX_BORDER,
         transition: `height ${MORPH_MS}ms ${MORPH_EASE}`,
       }}
     >
@@ -43,7 +58,7 @@ export function InfoBox({
         type="button"
         aria-expanded={isOpen}
         onClick={() => setOpen(!isOpen)}
-        className={`flex h-10 w-full shrink-0 cursor-pointer items-center justify-center ${
+        className={`flex h-[36px] w-full shrink-0 cursor-pointer items-center justify-center ${
           isOpen ? "border-b-[0.75px] border-ink" : ""
         }`}
         style={{ cursor: "pointer" }}
@@ -57,13 +72,25 @@ export function InfoBox({
         </span>
       </button>
       {body ? (
-        <p
-          className={`px-4 py-3 text-[12px] leading-normal ${
-            showBody ? "opacity-100" : "opacity-0"
-          }`}
+        <div
+          className={`px-4 py-3 text-[12px] leading-normal [&_p]:m-0 ${
+            indent ? "[&_p+p]:indent-6" : ""
+          } ${showBody ? "opacity-100" : "opacity-0"}`}
         >
-          {body}
-        </p>
+          {(typeof body === "string" ? [body] : body).map((paragraph, i, all) => (
+            <p key={i}>
+              {paragraph}
+              {moreHref && i === all.length - 1 ? (
+                <>
+                  {" "}
+                  <Link href={moreHref} className="underline underline-offset-2">
+                    {moreLabel}
+                  </Link>
+                </>
+              ) : null}
+            </p>
+          ))}
+        </div>
       ) : null}
     </div>
   );

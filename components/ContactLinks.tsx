@@ -55,7 +55,7 @@ export function ContactLinks({
   };
   const revealed = revealedCount ?? rows.length + 1;
   const rowClass =
-    "relative -mb-px flex h-10 w-full shrink-0 items-center border-[0.75px] border-ink bg-cream px-4 text-[12px] uppercase tracking-[0.02em] last:mb-0";
+    "relative -mb-px flex h-[36px] w-full shrink-0 items-center border-[0.75px] border-ink bg-cream px-4 text-[12px] uppercase tracking-[0.02em] last:mb-0";
 
   return (
     <div

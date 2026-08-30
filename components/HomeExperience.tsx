@@ -17,6 +17,7 @@ import {
 } from "@/lib/morph";
 import type { Partner } from "@/lib/partners";
 import {
+  disposeSilkscreenPrinter,
   getSilkscreenPrinter,
   PRINT_IN,
   PRINT_IN_MS,
@@ -229,6 +230,9 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
       window.clearTimeout(stampTimerRef.current);
       lingerTimersRef.current.forEach((timer) => window.clearTimeout(timer));
       lingerTimersRef.current.clear();
+      // Partner pages reuse the printer during their morph. All other routes
+      // should release its full-screen bitmap cache and GPU context.
+      if (!lockedRef.current) disposeSilkscreenPrinter();
     },
     [],
   );
@@ -508,6 +512,40 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
   const hasPlates = plates.length > 0 || stamps.length > 0;
   const morphing = morphPartner != null;
 
+  const infoBox = (
+    <div>
+      <InfoBox
+        body={morphPartner ? morphPartner.description : site.information}
+        moreHref={morphPartner ? undefined : "/about"}
+        showTitle={reveal >= infoTitleAt}
+        showBody={reveal >= infoBodyAt}
+        opaque={ready || hasPlates}
+      />
+    </div>
+  );
+
+  const partnersList = (
+    <div>
+      <PartnersList
+        partners={partners}
+        showTitle={reveal >= partnerTitleAt}
+        revealedCount={Math.max(0, reveal - (partnerStart - 1))}
+        opaque={ready || hasPlates}
+        activeSlug={activeSlug}
+        onHover={interactive ? onPartnerHover : undefined}
+        onSelect={interactive ? handleSelect : undefined}
+        collapsed={morphing}
+        visibleCount={listVisible ?? undefined}
+        showHeaderLabel={headerLabel}
+        logo={
+          morphPartner && morphLogo
+            ? { src: morphPartner.stampLogo, alt: morphPartner.name }
+            : null
+        }
+      />
+    </div>
+  );
+
   return (
     <div className="relative min-h-screen bg-cream">
       <Loader visible={phase === "loader"} />
@@ -536,7 +574,7 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
           phase === "loader" ? "opacity-0" : "opacity-100"
         }`}
       >
-        <aside className="flex w-full max-w-[375px] flex-col gap-[5px] px-5 py-5 max-[599px]:max-w-none">
+        <aside className="flex w-full max-w-[375px] flex-col gap-[6px] px-5 py-5 max-[599px]:max-w-none">
           <div>
             <AddressBox
               showLogo={reveal >= 5}
@@ -545,34 +583,8 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
             />
           </div>
 
-          <div>
-            <InfoBox
-              body={morphPartner ? morphPartner.description : site.information}
-              showTitle={reveal >= infoTitleAt}
-              showBody={reveal >= infoBodyAt}
-              opaque={ready || hasPlates}
-            />
-          </div>
-
-          <div>
-            <PartnersList
-              partners={partners}
-              showTitle={reveal >= partnerTitleAt}
-              revealedCount={Math.max(0, reveal - (partnerStart - 1))}
-              opaque={ready || hasPlates}
-              activeSlug={activeSlug}
-              onHover={interactive ? onPartnerHover : undefined}
-              onSelect={interactive ? handleSelect : undefined}
-              collapsed={morphing}
-              visibleCount={listVisible ?? undefined}
-              showHeaderLabel={headerLabel}
-              logo={
-                morphPartner && morphLogo
-                  ? { src: morphPartner.stampLogo, alt: morphPartner.name }
-                  : null
-              }
-            />
-          </div>
+          {infoBox}
+          {partnersList}
 
           <div>
             <ContactLinks

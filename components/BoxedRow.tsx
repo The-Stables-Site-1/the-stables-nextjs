@@ -20,7 +20,7 @@ export function BoxedRow({
   onMouseLeave,
 }: BoxedRowProps) {
   const base =
-    "relative flex h-10 w-full items-center border-[0.75px] border-ink bg-cream px-4 text-[12px] text-black -mb-px last:mb-0";
+    "relative flex h-[36px] w-full items-center border-[0.75px] border-ink bg-cream px-4 text-[12px] text-black -mb-px last:mb-0";
 
   if (as === "a" && href) {
     return (
