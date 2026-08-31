@@ -128,7 +128,7 @@ export function PartnerExperience({ partner }: PartnerExperienceProps) {
       </button>
 
       <div className="pointer-events-none absolute inset-0 z-20">
-        <aside className="pointer-events-none absolute top-0 left-0 flex h-full max-h-full w-full max-w-[375px] flex-col px-5 py-5 max-[599px]:max-w-none">
+        <aside className="pointer-events-none absolute top-0 inset-x-0 mx-auto flex h-full max-h-full w-full max-w-[375px] flex-col px-5 py-5 max-[599px]:max-w-none">
           <div className="pointer-events-auto flex max-h-full flex-col gap-[6px] overflow-y-auto overscroll-none">
             <div className="shrink-0">
               <AddressBox

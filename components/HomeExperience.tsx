@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AddressBox } from "@/components/AddressBox";
 import { ContactLinks, partnerContactRows } from "@/components/ContactLinks";
 import { InfoBox } from "@/components/InfoBox";
+import { BEAT_MS, IntroSequence, type IntroRect } from "@/components/IntroSequence";
 import { Loader } from "@/components/Loader";
 import { LogoStamp } from "@/components/LogoStamp";
 import { PartnersList } from "@/components/PartnersList";
@@ -32,12 +33,16 @@ import {
   type StampPlacement,
 } from "@/lib/stamp-field";
 
-type Phase = "loader" | "intro" | "ready";
+type Phase = "loader" | "hero" | "intro" | "ready";
 
 const LOADER_MS = 900;
 const CONTENT_PAUSE_MS = 80;
 const CONTENT_STAGGER_MS = 40;
 const BOX_REVEAL = 4;
+/** Reveal step at which the address module carries its stamp. */
+const ADDRESS_REVEAL = BOX_REVEAL + 1;
+/** Information, partners, contact: the three modules under the address box. */
+const MODULE_COUNT = 3;
 /** Set to true to restore the horse intro loader. */
 const SHOW_HORSE_LOADER = false;
 
@@ -90,11 +95,18 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
   const maxReveal = 4 + contentSteps;
 
   const [phase, setPhase] = useState<Phase>(() =>
-    hasAppBooted() ? "ready" : SHOW_HORSE_LOADER ? "loader" : "intro",
+    hasAppBooted() ? "ready" : SHOW_HORSE_LOADER ? "loader" : "hero",
   );
   const [reveal, setReveal] = useState(() =>
     hasAppBooted() ? maxReveal : BOX_REVEAL,
   );
+  const [introRect, setIntroRect] = useState<IntroRect | null>(null);
+  const [addressIn, setAddressIn] = useState(() => hasAppBooted());
+  const [modulesIn, setModulesIn] = useState(() =>
+    hasAppBooted() ? MODULE_COUNT : 0,
+  );
+  const addressRef = useRef<HTMLDivElement>(null);
+  const introTimersRef = useRef<number[]>([]);
   const [activeSlug, setActiveSlug] = useState<string | null>(null);
   const [locked, setLocked] = useState(false);
   const [morphPartner, setMorphPartner] = useState<Partner | null>(null);
@@ -237,23 +249,15 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
     [],
   );
 
-  useEffect(() => {
-    const alreadyBooted = hasAppBooted();
-    markAppBooted();
+  const afterIntro = (ms: number, run: () => void) => {
+    introTimersRef.current.push(window.setTimeout(run, ms));
+  };
 
-    const reduceMotion = window.matchMedia(
-      "(prefers-reduced-motion: reduce)",
-    ).matches;
-
-    if (alreadyBooted || reduceMotion) {
-      setReveal(maxReveal);
-      setPhase("ready");
-      return;
-    }
-
-    let step = BOX_REVEAL;
-    let timer = 0;
-    const startIntro = () => {
+  /** Walks the reveal counter up so each label lands one after the next. */
+  const startContentStagger = useCallback(
+    (from: number) => {
+      let step = from;
+      setReveal(step);
       setPhase("intro");
       const tick = () => {
         step += 1;
@@ -262,24 +266,88 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
           setPhase("ready");
           return;
         }
-        timer = window.setTimeout(tick, CONTENT_STAGGER_MS);
+        introTimersRef.current.push(
+          window.setTimeout(tick, CONTENT_STAGGER_MS),
+        );
       };
-      timer = window.setTimeout(tick, CONTENT_PAUSE_MS);
-    };
+      introTimersRef.current.push(window.setTimeout(tick, CONTENT_PAUSE_MS));
+    },
+    [maxReveal],
+  );
+
+  useEffect(() => {
+    const alreadyBooted = hasAppBooted();
+
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+
+    if (alreadyBooted || reduceMotion) {
+      markAppBooted();
+      setReveal(maxReveal);
+      setAddressIn(true);
+      setModulesIn(MODULE_COUNT);
+      setPhase("ready");
+      return;
+    }
 
     if (!SHOW_HORSE_LOADER) {
-      startIntro();
-      return () => window.clearTimeout(timer);
+      setPhase("hero");
+      return;
     }
 
     setPhase("loader");
-    const loader = window.setTimeout(startIntro, LOADER_MS);
-
-    return () => {
-      window.clearTimeout(loader);
-      window.clearTimeout(timer);
-    };
+    const loader = window.setTimeout(() => setPhase("hero"), LOADER_MS);
+    return () => window.clearTimeout(loader);
   }, [maxReveal]);
+
+  useEffect(
+    () => () => {
+      introTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    },
+    [],
+  );
+
+  // The intro card rises to wherever the address module actually sits, so the
+  // hand-off is a swap rather than an approximation.
+  useLayoutEffect(() => {
+    if (phase !== "hero") return;
+    const el = addressRef.current;
+    if (!el) return;
+
+    const measure = () => {
+      const box = el.getBoundingClientRect();
+      setIntroRect({
+        left: box.left,
+        top: box.top,
+        width: box.width,
+        height: box.height,
+      });
+    };
+
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [phase]);
+
+  /** The card has flipped and is on its way up; drop the rest of the stack in. */
+  const handleIntroTurn = () => {
+    setReveal(ADDRESS_REVEAL);
+    let shown = 0;
+    const tick = () => {
+      shown += 1;
+      setModulesIn(shown);
+      if (shown < MODULE_COUNT) afterIntro(BEAT_MS, tick);
+    };
+    afterIntro(BEAT_MS, tick);
+  };
+
+  /** The card is in the slot: hand the position back to the real module. */
+  const handleIntroLand = () => {
+    markAppBooted();
+    setAddressIn(true);
+    startContentStagger(ADDRESS_REVEAL);
+  };
 
   const ready = phase === "ready";
   const infoTitleAt = 6;
@@ -508,7 +576,7 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
     return () => stopIdleRef.current();
   }, [phase, locked, activeSlug]);
 
-  const interactive = !locked && phase !== "loader";
+  const interactive = !locked && phase !== "loader" && phase !== "hero";
   const hasPlates = plates.length > 0 || stamps.length > 0;
   const morphing = morphPartner != null;
 
@@ -550,6 +618,15 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
     <div className="relative min-h-screen bg-cream">
       <Loader visible={phase === "loader"} />
 
+      {phase === "hero" && introRect ? (
+        <IntroSequence
+          rect={introRect}
+          line={site.introLine}
+          onTurn={handleIntroTurn}
+          onLand={handleIntroLand}
+        />
+      ) : null}
+
       <div
         className="pointer-events-none fixed inset-0 z-0 isolate overflow-hidden bg-cream"
         aria-hidden
@@ -570,23 +647,30 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
       </div>
 
       <div
-        className={`relative z-10 flex min-h-screen ${
+        className={`relative z-10 flex min-h-screen justify-center ${
           phase === "loader" ? "opacity-0" : "opacity-100"
         }`}
       >
         <aside className="flex w-full max-w-[375px] flex-col gap-[6px] px-5 py-5 max-[599px]:max-w-none">
-          <div>
+          <div
+            ref={addressRef}
+            style={{ visibility: addressIn ? "visible" : "hidden" }}
+          >
             <AddressBox
-              showLogo={reveal >= 5}
+              showLogo={reveal >= ADDRESS_REVEAL}
               opaque={ready || hasPlates}
               collapsed={morphing}
             />
           </div>
 
-          {infoBox}
-          {partnersList}
+          <div style={{ visibility: modulesIn > 0 ? "visible" : "hidden" }}>
+            {infoBox}
+          </div>
+          <div style={{ visibility: modulesIn > 1 ? "visible" : "hidden" }}>
+            {partnersList}
+          </div>
 
-          <div>
+          <div style={{ visibility: modulesIn > 2 ? "visible" : "hidden" }}>
             <ContactLinks
               revealedCount={
                 morphPartner

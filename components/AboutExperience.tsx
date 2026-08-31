@@ -14,7 +14,7 @@ export function AboutExperience() {
 
   return (
     <div className="relative min-h-screen bg-cream">
-      <div className="relative z-10 flex min-h-screen">
+      <div className="relative z-10 flex min-h-screen justify-center">
         <aside className="flex w-full max-w-[375px] flex-col gap-[6px] px-5 py-5 max-[599px]:max-w-none">
           <div>
             <AddressBox href="/" opaque />

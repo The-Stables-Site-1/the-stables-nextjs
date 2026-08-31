@@ -11,6 +11,9 @@ export const site = {
   website: "THESTABLES.COM",
   websiteUrl: "https://thestables.world",
   information,
+  /** The one-liner the intro sets word by word; only the name is capitalised. */
+  introLine:
+    "THE STABLES is a high-touch commercial team for distinctive beauty and lifestyle houses",
   about: [
     {
       title: "INFORMATION",

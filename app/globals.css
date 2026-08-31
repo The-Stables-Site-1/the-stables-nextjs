@@ -42,3 +42,22 @@ body {
 .scroll-hidden::-webkit-scrollbar {
   display: none;
 }
+
+/* Overshoots 180deg and rocks back, the way a card lands on a table. */
+@keyframes card-flip {
+  0% {
+    transform: rotateY(0deg) rotateZ(0deg) scale(1);
+  }
+  40% {
+    transform: rotateY(78deg) rotateZ(-1.4deg) scale(1.05);
+  }
+  74% {
+    transform: rotateY(152deg) rotateZ(1deg) scale(1.02);
+  }
+  88% {
+    transform: rotateY(186deg) rotateZ(0.4deg) scale(0.994);
+  }
+  100% {
+    transform: rotateY(180deg) rotateZ(0deg) scale(1);
+  }
+}
