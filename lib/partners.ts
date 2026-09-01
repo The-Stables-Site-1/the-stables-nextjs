@@ -165,8 +165,8 @@ export const partners: Partner[] = [
       "/partners/zure-solaris/hero.png",
       "/partners/zure-solaris/gallery/01.png",
       "/partners/zure-solaris/gallery/02.png",
-      "/partners/zure-solaris/gallery/03.png",
       "/partners/zure-solaris/gallery/04.png",
+      "/partners/zure-solaris/gallery/03.png",
     ],
     links: {
       wholesale: "/contact",
