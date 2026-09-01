@@ -154,7 +154,7 @@ export const partners: Partner[] = [
     name: "Zure Solaris",
     description:
       "ZURE SOLARIS explores light, scent, and ritual through distinctive beauty and wellness products.",
-    stampLogo: PLACEHOLDER_LOGO,
+    stampLogo: "/partners/zure-solaris/logo.png",
     images: [
       "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/zure-solaris/hero.jpeg",
       "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/zure-solaris/gallery/01.jpeg",
