@@ -42,12 +42,11 @@ export const partners: Partner[] = [
       "FACILE creates refined skincare and body care with a focus on everyday ritual and elevated essentials.",
     stampLogo: "/partners/facile/logo.png",
     images: [
-      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/facile/hero.jpeg",
-      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/facile/gallery/02.jpeg",
-      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/facile/gallery/03.jpeg",
-      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/facile/gallery/04.jpeg",
-      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/facile/gallery/05.jpeg",
-      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/facile/gallery/06.jpeg",
+      "/partners/facile/hero.jpg",
+      "/partners/facile/gallery/01.jpg",
+      "/partners/facile/gallery/02.jpg",
+      "/partners/facile/gallery/03.jpg",
+      "/partners/facile/gallery/04.jpg",
     ],
     links: {
       wholesale: "/contact",
