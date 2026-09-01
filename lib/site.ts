@@ -13,7 +13,7 @@ export const site = {
   information,
   /** The one-liner the intro sets word by word; only the name is capitalised. */
   introLine:
-    "THE STABLES is a high-touch commercial team for distinctive beauty and lifestyle houses",
+    "THE STABLES works in the space between taste and traction.",
   about: [
     {
       title: "INFORMATION",
