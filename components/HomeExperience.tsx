@@ -501,6 +501,7 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
         showTitle={reveal >= infoTitleAt}
         showBody={reveal >= infoBodyAt}
         opaque={ready || hasPlates}
+        fit
       />
     </div>
   );

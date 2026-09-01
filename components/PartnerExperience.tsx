@@ -162,6 +162,7 @@ export function PartnerExperience({ partner }: PartnerExperienceProps) {
                   homeContent ? site.informationBox : partner.description
                 }
                 moreHref={homeContent ? "/about" : undefined}
+                fit={homeContent}
                 open={detailOpen}
                 onOpenChange={setDetailOpen}
               />
