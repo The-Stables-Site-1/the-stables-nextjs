@@ -514,7 +514,7 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
   const infoBox = (
     <div>
       <InfoBox
-        body={morphPartner ? morphPartner.description : site.informationBox}
+        body={morphPartner ? (morphPartner.descriptionBlocks ?? morphPartner.description) : site.informationBox}
         moreHref={morphPartner ? undefined : "/about"}
         showTitle={reveal >= infoTitleAt}
         showBody={reveal >= infoBodyAt}

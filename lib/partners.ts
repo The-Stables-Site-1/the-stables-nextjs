@@ -7,6 +7,7 @@ export type Partner = {
   slug: string;
   name: string;
   description: string;
+  descriptionBlocks?: readonly string[];
   stampLogo: string;
   images: string[];
   links: {
@@ -21,7 +22,7 @@ export const partners: Partner[] = [
     slug: "dedcool",
     name: "DedCool",
     description:
-      "DEDCOOL is a genderless, vegan, non-toxic fragrance house built on making life smell good. We translate signature scents, embedding fragrance in daily products from perfume to detergent and dryer sheets.",
+      "DedCool is a functional fragrance brand that empowers all people to smell and feel good through scent. The brand is on a mission to reshape the way fragrance is defined and experienced, built on the belief that everyone should have a signature scent that extends beyond a glass bottle. DedCool brings fragrance into everyday routines through unexpected mediums - from laundry detergent, to car air fresheners, and pets- so scent becomes a practical, integrated part of daily life.",
     stampLogo: PLACEHOLDER_LOGO,
     images: [
       "/partners/dedcool/hero.jpg",
@@ -39,7 +40,11 @@ export const partners: Partner[] = [
     slug: "facile",
     name: "Facile",
     description:
-      "FACILE creates refined skincare and body care with a focus on everyday ritual and elevated essentials.",
+      "We believe good skincare should work for everyone. That's why Facile is built on doctor-led, proven ingredients that are non-toxic, effective, and feel-good. With intentional formulations and clinical results, achieving good skin is finally easy.",
+    descriptionBlocks: [
+      "A Simplified, Clinically Kind, Dermatologist-Formulated Approach To Happy Skin.",
+      "We believe good skincare should work for everyone. That's why Facile is built on doctor-led, proven ingredients that are non-toxic, effective, and feel-good. With intentional formulations and clinical results, achieving good skin is finally easy.",
+    ],
     stampLogo: "/partners/facile/logo.png",
     images: [
       "/partners/facile/hero.jpg",
