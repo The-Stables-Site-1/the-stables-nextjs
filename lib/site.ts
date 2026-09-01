@@ -1,5 +1,5 @@
 const p1 =
-  "THE STABLES is a New York-based external commercial team and operating layer for premium beauty, fragrance, wellness, and lifestyle brands building stronger retail distribution.";
+  "THE STABLES is a New York-based commercial team and operating layer for premium beauty, fragrance, wellness, and lifestyle brands building stronger retail distribution.";
 const p2 =
   "We work in the space between taste and traction, connecting founder vision, buyer relationships, and disciplined follow-through to measurable commercial growth.";
 const p3 =
