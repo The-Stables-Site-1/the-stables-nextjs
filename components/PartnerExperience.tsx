@@ -14,10 +14,13 @@ import {
   MORPH_MS,
 } from "@/lib/morph";
 import { partners as allPartners, type Partner } from "@/lib/partners";
-import { disposeSilkscreenPrinter } from "@/lib/silkscreen-gl";
+import {
+  disposeSilkscreenPrinter,
+  getSilkscreenPrinter,
+} from "@/lib/silkscreen-gl";
 import { site } from "@/lib/site";
 
-/** How long each frame holds before the next one fades in. */
+/** How long each frame holds before the next cut. */
 const SLIDE_MS = 4200;
 
 type PartnerExperienceProps = {
@@ -41,6 +44,16 @@ export function PartnerExperience({ partner }: PartnerExperienceProps) {
     markAppBooted();
     router.prefetch("/");
   }, [router]);
+
+  useEffect(() => {
+    const printer = getSilkscreenPrinter();
+    void printer?.preload(partner.stampLogo);
+    for (const other of allPartners) {
+      if (other.slug === partner.slug) continue;
+      router.prefetch(`/partners/${other.slug}`);
+      void printer?.preload(other.stampLogo);
+    }
+  }, [partner, router]);
 
   useEffect(() => {
     setIndex(0);
@@ -118,9 +131,10 @@ export function PartnerExperience({ partner }: PartnerExperienceProps) {
               alt=""
               fill
               sizes="100vw"
-              priority={i === 0}
-              className={`object-cover transition-opacity duration-700 ${
-                leaving || i !== index ? "opacity-0" : "opacity-100"
+              priority
+              fetchPriority={i === 0 ? "high" : "low"}
+              className={`object-cover ${
+                leaving || i !== index ? "invisible" : "visible"
               }`}
             />
           ))}
@@ -128,9 +142,9 @@ export function PartnerExperience({ partner }: PartnerExperienceProps) {
       </button>
 
       <div className="pointer-events-none absolute inset-0 z-20">
-        <aside className="pointer-events-none absolute top-0 inset-x-0 mx-auto flex h-full max-h-full w-full max-w-[375px] flex-col px-5 py-5 max-[599px]:max-w-none">
-          <div className="pointer-events-auto flex max-h-full flex-col gap-[6px] overflow-y-auto overscroll-none">
-            <div className="shrink-0">
+        <aside className="pointer-events-none absolute inset-x-0 top-0 mx-auto flex h-full max-h-full w-full max-w-[375px] flex-col justify-center px-5 py-5 max-[599px]:max-w-none">
+          <div className="pointer-events-auto flex min-h-0 w-full max-h-full flex-col overflow-y-auto overscroll-none">
+            <div className="order-1 shrink-0">
               <AddressBox
                 collapsed={collapsed}
                 href="/"
@@ -138,7 +152,11 @@ export function PartnerExperience({ partner }: PartnerExperienceProps) {
               />
             </div>
 
-            <div className="shrink-0">
+            <div
+              className={`relative z-[1] shrink-0 -mt-px ${
+                homeContent ? "order-2" : "order-3"
+              }`}
+            >
               <InfoBox
                 body={
                   homeContent ? site.information : partner.description
@@ -149,7 +167,11 @@ export function PartnerExperience({ partner }: PartnerExperienceProps) {
               />
             </div>
 
-            <div className="shrink-0">
+            <div
+              className={`relative z-[1] shrink-0 -mt-px ${
+                homeContent ? "order-3" : "order-2"
+              }`}
+            >
               <PartnersList
                 partners={allPartners}
                 collapsed={collapsed}
@@ -169,7 +191,7 @@ export function PartnerExperience({ partner }: PartnerExperienceProps) {
               />
             </div>
 
-            <div className="shrink-0">
+            <div className="relative z-[1] order-4 shrink-0 -mt-px">
               <ContactLinks
                 title={homeContent ? "CONTACT" : "INQUIRE"}
                 rows={

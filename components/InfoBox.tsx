@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { BOX_BORDER, MORPH_EASE, MORPH_MS, ROW_H, STAMP_BOX_H } from "@/lib/morph";
+import { BOX_BORDER, MORPH_EASE, MORPH_MS, PARTNER_ROW_H, STAMP_BOX_H } from "@/lib/morph";
 
 type InfoBoxProps = {
   title?: string;
@@ -49,8 +49,8 @@ export function InfoBox({
         height: isOpen
           ? fit
             ? "auto"
-            : STAMP_BOX_H + (moreHref ? 20 : 0)
-          : ROW_H + BOX_BORDER,
+            : STAMP_BOX_H
+          : PARTNER_ROW_H + BOX_BORDER,
         transition: `height ${MORPH_MS}ms ${MORPH_EASE}`,
       }}
     >
@@ -58,13 +58,13 @@ export function InfoBox({
         type="button"
         aria-expanded={isOpen}
         onClick={() => setOpen(!isOpen)}
-        className={`flex h-[36px] w-full shrink-0 cursor-pointer items-center justify-center ${
+        className={`flex h-[32px] w-full shrink-0 cursor-pointer items-center justify-center ${
           isOpen ? "border-b-[0.75px] border-ink" : ""
         }`}
         style={{ cursor: "pointer" }}
       >
         <span
-          className={`text-[12px] uppercase tracking-[0.02em] ${
+          className={`text-[11px] uppercase tracking-[0.02em] ${
             showTitle ? "opacity-100" : "opacity-0"
           }`}
         >
@@ -73,7 +73,7 @@ export function InfoBox({
       </button>
       {body ? (
         <div
-          className={`px-4 py-3 text-[12px] leading-normal [&_p]:m-0 ${
+          className={`px-3 py-3 text-[12px] leading-normal [&_p]:m-0 ${
             indent ? "[&_p+p]:indent-6" : ""
           } ${showBody ? "opacity-100" : "opacity-0"}`}
         >

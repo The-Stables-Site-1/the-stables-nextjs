@@ -20,7 +20,7 @@ export default function ContactPage() {
     <div className="relative min-h-screen bg-cream">
       <CloseButton />
 
-      <div className="px-5 py-5">
+      <div className="flex min-h-screen items-center justify-center px-5 py-5">
         <form onSubmit={onSubmit} className="w-[335px] max-[599px]:w-full">
           <div className="flex flex-col">
             <div className="relative -mb-px flex h-[36px] items-center justify-center border-[0.75px] border-ink bg-cream">

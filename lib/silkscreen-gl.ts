@@ -951,6 +951,12 @@ export type SilkscreenPrinter = {
     progress?: number,
     urgent?: boolean,
   ) => Promise<ImageBitmap | null>;
+  peekStamp: (
+    url: string,
+    width: number,
+    height: number,
+    progress?: number,
+  ) => ImageBitmap | null;
   /** Loads and uploads an image up front, reporting its intrinsic size. */
   preload: (url: string) => Promise<{ w: number; h: number } | null>;
   /** Presses one coloured logo straight into a target 2D canvas. */
@@ -1259,6 +1265,9 @@ export function createSilkscreenPrinter(): SilkscreenPrinter | null {
     peek(url, progress = 1, color = 0) {
       return cache.get(frameKey(url, progress, color)) ?? null;
     },
+    peekStamp(url, width, height, progress = 1) {
+      return cache.get(stampKey(url, width, height, progress)) ?? null;
+    },
     print(url, progress = 1, color = 0, urgentJob = false) {
       if (disposed) return Promise.resolve(null);
       return enqueue(
@@ -1294,12 +1303,24 @@ export function createSilkscreenPrinter(): SilkscreenPrinter | null {
       }
       if (!tex || disposed) return false;
 
+      // The die is the image's own ratio. Contain it in the requested art box
+      // so a wrong placement aspect cannot squash or stretch the mark.
+      const texAspect = tex.w / Math.max(tex.h, 1);
+      let artW = Math.max(options.artW, 1);
+      let artH = Math.max(options.artH, 1);
+      const boxAspect = artW / artH;
+      if (texAspect > boxAspect) {
+        artH = artW / texAspect;
+      } else {
+        artW = artH * texAspect;
+      }
+
       // Paint and copy in one synchronous block: the GL canvas is shared.
       const w = Math.max(1, Math.min(1400, Math.round(target.width)));
       const h = Math.max(1, Math.min(1400, Math.round(target.height)));
       if (canvas.width !== w) canvas.width = w;
       if (canvas.height !== h) canvas.height = h;
-      if (!paintStamp(tex.tex, options)) return false;
+      if (!paintStamp(tex.tex, { ...options, artW, artH })) return false;
       const ctx = target.getContext("2d");
       if (!ctx) return false;
       ctx.clearRect(0, 0, target.width, target.height);

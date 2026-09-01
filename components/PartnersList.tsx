@@ -7,8 +7,8 @@ import {
   BOX_BORDER,
   MORPH_EASE,
   MORPH_MS,
+  PARTNER_ROW_H,
   partnersOpenHeight,
-  ROW_H,
   STAMP_BOX_H,
 } from "@/lib/morph";
 import type { Partner } from "@/lib/partners";
@@ -97,7 +97,7 @@ export function PartnersList({
           ? STAMP_BOX_H
           : open
             ? partnersOpenHeight(partners.length)
-            : ROW_H + BOX_BORDER,
+            : PARTNER_ROW_H + BOX_BORDER,
         transition: `height ${MORPH_MS}ms ${MORPH_EASE}`,
       }}
     >
@@ -110,12 +110,12 @@ export function PartnersList({
             return !current;
           });
         }}
-        className={`flex h-[36px] w-full shrink-0 cursor-pointer items-center justify-center ${
+        className={`flex h-[32px] w-full shrink-0 cursor-pointer items-center justify-center ${
           open && showHeaderLabel ? "border-b-[0.75px] border-ink" : ""
         }`}
       >
         <span
-          className={`text-[12px] uppercase tracking-[0.02em] ${
+          className={`text-[11px] uppercase tracking-[0.02em] ${
             showTitle && showHeaderLabel ? "opacity-100" : "opacity-0"
           }`}
         >
@@ -131,7 +131,7 @@ export function PartnersList({
               <Link
                 href={`/partners/${partner.slug}`}
                 data-partner-slug={partner.slug}
-                className={`relative flex h-[36px] items-center px-4 text-[13px] text-black ${
+                className={`relative flex h-[32px] items-center px-3 text-[11px] text-black ${
                   index < shown - 1 ? "border-b-[0.75px] border-ink" : ""
                 } ${index < revealedCount ? "" : "pointer-events-none"}`}
                 onClick={(event) => {
@@ -150,14 +150,14 @@ export function PartnersList({
                 }}
               >
                 <span
-                  className={`uppercase ${
+                  className={`uppercase tracking-[0.04em] ${
                     index < revealedCount ? "opacity-100" : "opacity-0"
                   }`}
                 >
                   {partner.name}
                 </span>
                 <span
-                  className={`absolute right-4 grid size-2 place-items-center rounded-full border-[0.75px] border-black ${
+                  className={`absolute right-3 grid size-2 place-items-center rounded-full border-[0.75px] border-black ${
                     index < revealedCount ? "opacity-100" : "opacity-0"
                   }`}
                 >
