@@ -46,7 +46,7 @@ const MODULE_COUNT = 3;
 /** Set to true to restore the horse intro loader. */
 const SHOW_HORSE_LOADER = false;
 
-const IDLE_MS = 1500;
+const IDLE_MS = 500;
 
 /** Idle stamping cadence: one impression at a time, never lifted. */
 const STAMP_GAP_MS = 600;
