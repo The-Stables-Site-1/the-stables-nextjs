@@ -27,7 +27,6 @@ export const partners: Partner[] = [
       "/partners/dedcool/hero.jpg",
       "/partners/dedcool/gallery/01.jpg",
       "/partners/dedcool/gallery/02.jpg",
-      "/partners/dedcool/gallery/03.jpg",
       "/partners/dedcool/gallery/04.jpg",
     ],
     links: {
