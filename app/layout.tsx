@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { PreloadMedia } from "@/components/PreloadMedia";
 import { StampClicks } from "@/components/StampClicks";
 import "./globals.css";
 
@@ -17,6 +18,7 @@ export default function RootLayout({
     <html lang="en" className="h-full">
       <body className="min-h-full bg-cream font-sans text-black antialiased">
         <StampClicks />
+        <PreloadMedia />
         {children}
       </body>
     </html>

@@ -9,7 +9,7 @@ type LoaderProps = {
 export function Loader({ visible }: LoaderProps) {
   return (
     <div
-      className={`fixed inset-0 z-[100] flex items-center justify-center bg-cream transition-opacity duration-500 ${
+      className={`fixed inset-0 z-[100] flex items-center justify-center bg-cream ${
         visible ? "opacity-100" : "pointer-events-none opacity-0"
       }`}
       aria-hidden={!visible}

@@ -1,3 +1,4 @@
+import { STAMP_ART_H, STAMP_ART_W } from "@/lib/morph";
 import { stampBoxSize, type StampInk } from "@/lib/silkscreen-gl";
 
 /** Mail-art pad colours: office rubber-stamp inks, muted for cream stock. */
@@ -38,6 +39,14 @@ export type StampLogo = {
   aspect: number;
 };
 
+/** Viewport-space box stamps must not cover — the centre modules. */
+export type AvoidRect = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+};
+
 /** Small deterministic PRNG so a field can be replayed from its seed. */
 export function mulberry32(seed: number) {
   let a = seed >>> 0;
@@ -69,24 +78,158 @@ const MIN_WIDTH = 700;
 const MIN_HEIGHT = 380;
 /** How far a stamp can wander from its cell, as a share of the cell. */
 const CELL_JITTER = 0.95;
-const SIZE_SCALE = 0.85;
+/**
+ * Keep-out around the centre column. Negative so stamps can sit in the aside
+ * padding and graze the modules — the boxes themselves stay readable.
+ */
+const AVOID_PAD = -24;
+const PLACE_TRIES = 16;
+
+function inflateAvoid(avoid: AvoidRect, pad: number): AvoidRect {
+  return {
+    x: avoid.x - pad,
+    y: avoid.y - pad,
+    w: avoid.w + pad * 2,
+    h: avoid.h + pad * 2,
+  };
+}
+
+function boxOverlapsAvoid(
+  x: number,
+  y: number,
+  boxW: number,
+  boxH: number,
+  avoid: AvoidRect,
+) {
+  const left = x - boxW / 2;
+  const top = y - boxH / 2;
+  return (
+    left < avoid.x + avoid.w &&
+    left + boxW > avoid.x &&
+    top < avoid.y + avoid.h &&
+    top + boxH > avoid.y
+  );
+}
+
+/** True when a stamp's rotated ink box intersects the centre container. */
+export function stampOverlapsAvoid(
+  x: number,
+  y: number,
+  artW: number,
+  artH: number,
+  angle: number,
+  avoid: AvoidRect,
+) {
+  const box = stampBoxSize(artW, artH, angle, STAMP_PAD);
+  return boxOverlapsAvoid(x, y, box.w, box.h, inflateAvoid(avoid, AVOID_PAD));
+}
+
+function clamp(
+  value: number,
+  min: number,
+  max: number,
+) {
+  return Math.min(Math.max(value, min), max);
+}
 
 /**
- * A die is cut once, so every impression of a brand is the same size. Each
- * logo is contain-fitted into one shared frame, tall marks and wide wordmarks
- * landing at matched visual weight.
+ * If a stamp landed on the centre column, slide it to the nearest free side
+ * (or above / below) so the cell is not wasted.
  */
-function artSize(logo: StampLogo, base: number) {
-  const frameW = base * SIZE_SCALE;
-  const frameH = base * SIZE_SCALE * 0.8;
-  const aspect = Math.max(logo.aspect, 0.05);
+function nudgeOutOfAvoid(
+  x: number,
+  y: number,
+  boxW: number,
+  boxH: number,
+  avoid: AvoidRect,
+  width: number,
+  height: number,
+  overX: number,
+  overY: number,
+): { x: number; y: number } | null {
+  if (!boxOverlapsAvoid(x, y, boxW, boxH, avoid)) return { x, y };
+
+  const minX = boxW / 2 - overX;
+  const maxX = width - boxW / 2 + overX;
+  const minY = boxH / 2 - overY;
+  const maxY = height - boxH / 2 + overY;
+
+  const candidates: { x: number; y: number }[] = [];
+  const leftX = avoid.x - boxW / 2;
+  const rightX = avoid.x + avoid.w + boxW / 2;
+  const upY = avoid.y - boxH / 2;
+  const downY = avoid.y + avoid.h + boxH / 2;
+
+  if (leftX >= minX && leftX <= maxX) candidates.push({ x: leftX, y });
+  if (rightX >= minX && rightX <= maxX) candidates.push({ x: rightX, y });
+  if (upY >= minY && upY <= maxY) candidates.push({ x, y: upY });
+  if (downY >= minY && downY <= maxY) candidates.push({ x, y: downY });
+
+  let best: { x: number; y: number } | null = null;
+  let bestDist = Infinity;
+  for (const candidate of candidates) {
+    const nx = clamp(candidate.x, minX, maxX);
+    const ny = clamp(candidate.y, minY, maxY);
+    if (boxOverlapsAvoid(nx, ny, boxW, boxH, avoid)) continue;
+    const dist = (nx - x) * (nx - x) + (ny - y) * (ny - y);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = { x: nx, y: ny };
+    }
+  }
+  return best;
+}
+
+/** Same small tilt the partner-page stamp module uses, seeded by the brand name. */
+export function stampModuleTilt(seed: string) {
+  let hash = 2166136261;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  const unit = (hash >>> 0) / 4294967296;
+  const mag = 5 + unit * 11;
+  return (hash & 1) === 0 ? mag : -mag;
+}
+
+/** Scale a rotated rectangle so it still sits inside `boxW` × `boxH`. */
+export function stampFitScale(deg: number, boxW: number, boxH: number) {
+  const rad = (deg * Math.PI) / 180;
+  const sin = Math.abs(Math.sin(rad));
+  const cos = Math.abs(Math.cos(rad));
+  const rotW = boxW * cos + boxH * sin;
+  const rotH = boxW * sin + boxH * cos;
+  return Math.min(boxW / Math.max(rotW, 1), boxH / Math.max(rotH, 1));
+}
+
+/** Contain-fit a logo into a frame without stretching. */
+export function containArt(aspect: number, frameW: number, frameH: number) {
+  const a = Math.max(aspect, 0.05);
   let w = frameW;
-  let h = w / aspect;
+  let h = w / a;
   if (h > frameH) {
     h = frameH;
-    w = h * aspect;
+    w = h * a;
   }
   return { w, h };
+}
+
+/**
+ * Die size matching the partner-page stamp module: contain-fitted into the
+ * inner frame, then scaled so the module's slight tilt still sits inside.
+ */
+export function moduleStampArtSize(aspect: number, seed: string) {
+  const fitted = containArt(aspect, STAMP_ART_W, STAMP_ART_H);
+  const scale = stampFitScale(
+    stampModuleTilt(seed),
+    STAMP_ART_W,
+    STAMP_ART_H,
+  );
+  return { w: fitted.w * scale, h: fitted.h * scale };
+}
+
+function artSize(logo: StampLogo) {
+  return moduleStampArtSize(logo.aspect, logo.name || logo.src);
 }
 
 type PlanOptions = {
@@ -94,30 +237,40 @@ type PlanOptions = {
   width: number;
   height: number;
   seed: number;
+  /** Centre content stamps must not cover. */
+  avoid?: AvoidRect | null;
 };
 
 /**
  * Scatters logos over a shuffled, jittered grid: even coverage of the page,
  * but crooked and clustered enough to read as a hand working across a sheet.
+ * Stamps hug the centre modules when `avoid` is set, close enough to graze.
  */
 export function planStampField({
   logos,
   width,
   height,
   seed,
+  avoid,
 }: PlanOptions): StampPlacement[] {
   if (!logos.length || width < MIN_WIDTH || height < MIN_HEIGHT) return [];
+
+  const forbidden = avoid ? inflateAvoid(avoid, AVOID_PAD) : null;
+  const blocked =
+    forbidden == null
+      ? 0
+      : Math.max(0, Math.min(forbidden.w, width) * Math.min(forbidden.h, height));
+  const usable = Math.max(0, width * height - blocked);
 
   const rand = mulberry32(seed);
   const count = Math.max(
     8,
-    Math.min(20, Math.round((width * height) / AREA_PER_STAMP)),
+    Math.min(20, Math.round((usable || width * height) / AREA_PER_STAMP)),
   );
   const cols = Math.max(1, Math.round(Math.sqrt((count * width) / height)));
   const rows = Math.max(1, Math.ceil(count / cols));
   const cellW = width / cols;
   const cellH = height / rows;
-  const base = Math.max(110, Math.min(260, Math.min(cellW, cellH) * 0.82));
 
   const cells: number[] = [];
   for (let i = 0; i < cols * rows; i += 1) cells.push(i);
@@ -132,7 +285,12 @@ export function planStampField({
   let inkIndex = Math.floor(rand() * inks.length);
   let logoIndex = Math.floor(rand() * logos.length);
 
-  for (let i = 0; i < Math.min(count, cells.length); i += 1) {
+  for (const cell of cells) {
+    if (placed.length >= count) break;
+
+    const cx = (cell % cols) * cellW + cellW / 2;
+    const cy = Math.floor(cell / cols) * cellH + cellH / 2;
+
     // Jump the list so the same brand never lands twice in a row.
     logoIndex =
       (logoIndex + 1 + Math.floor(rand() * Math.max(1, logos.length - 1))) %
@@ -153,25 +311,74 @@ export function planStampField({
     }
     used.add(inkIndex);
 
-    const { w, h } = artSize(logo, base);
+    const { w, h } = artSize(logo);
     const angle = pickAngle(rand);
     const box = stampBoxSize(w, h, angle, STAMP_PAD);
-    const cell = cells[i];
-    const cx = (cell % cols) * cellW + cellW / 2;
-    const cy = Math.floor(cell / cols) * cellH + cellH / 2;
 
     // Loose enough to crowd and overprint neighbours, and to hang off the
     // sheet edge the way a real stamp does.
     const overX = box.w * 0.22;
     const overY = box.h * 0.22;
-    const x = Math.min(
-      Math.max(cx + (rand() - 0.5) * cellW * CELL_JITTER, box.w / 2 - overX),
-      width - box.w / 2 + overX,
-    );
-    const y = Math.min(
-      Math.max(cy + (rand() - 0.5) * cellH * CELL_JITTER, box.h / 2 - overY),
-      height - box.h / 2 + overY,
-    );
+    const minX = box.w / 2 - overX;
+    const maxX = width - box.w / 2 + overX;
+    const minY = box.h / 2 - overY;
+    const maxY = height - box.h / 2 + overY;
+
+    let x = 0;
+    let y = 0;
+    let found = false;
+    for (let attempt = 0; attempt < PLACE_TRIES; attempt += 1) {
+      const nextX = clamp(
+        cx + (rand() - 0.5) * cellW * CELL_JITTER,
+        minX,
+        maxX,
+      );
+      const nextY = clamp(
+        cy + (rand() - 0.5) * cellH * CELL_JITTER,
+        minY,
+        maxY,
+      );
+      if (
+        forbidden &&
+        boxOverlapsAvoid(nextX, nextY, box.w, box.h, forbidden)
+      ) {
+        continue;
+      }
+      x = nextX;
+      y = nextY;
+      found = true;
+      break;
+    }
+
+    if (!found && forbidden) {
+      const seededX = clamp(
+        cx + (rand() - 0.5) * cellW * CELL_JITTER,
+        minX,
+        maxX,
+      );
+      const seededY = clamp(
+        cy + (rand() - 0.5) * cellH * CELL_JITTER,
+        minY,
+        maxY,
+      );
+      const nudged = nudgeOutOfAvoid(
+        seededX,
+        seededY,
+        box.w,
+        box.h,
+        forbidden,
+        width,
+        height,
+        overX,
+        overY,
+      );
+      if (!nudged) continue;
+      x = nudged.x;
+      y = nudged.y;
+      found = true;
+    }
+
+    if (!found) continue;
 
     placed.push({
       slug: logo.slug,
@@ -189,4 +396,26 @@ export function planStampField({
   }
 
   return placed;
+}
+
+/**
+ * One impression of a specific logo, using the same scatter, tilt, and
+ * centre-column avoidance as the idle field.
+ */
+export function placeOneStamp({
+  logo,
+  width,
+  height,
+  seed,
+  avoid,
+}: {
+  logo: StampLogo;
+  width: number;
+  height: number;
+  seed: number;
+  avoid?: AvoidRect | null;
+}): StampPlacement | null {
+  return (
+    planStampField({ logos: [logo], width, height, seed, avoid })[0] ?? null
+  );
 }

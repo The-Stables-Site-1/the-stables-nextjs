@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   getSilkscreenPrinter,
-  PRINT_IN,
-  PRINT_IN_MS,
 } from "@/lib/silkscreen-gl";
+import { STAMP_ART_H, STAMP_ART_W } from "@/lib/morph";
 
 const DPR_CAP = 1.25;
 
@@ -50,11 +49,14 @@ export function StampBox({
   const printedSrc = useRef<string | null>(null);
   const [ready, setReady] = useState(false);
   const [fallback, setFallback] = useState(false);
-  const [box, setBox] = useState<{ w: number; h: number } | null>(null);
+  const [box, setBox] = useState<{ w: number; h: number }>({
+    w: STAMP_ART_W,
+    h: STAMP_ART_H,
+  });
   const angle = useMemo(() => stampAngle(seed || src), [seed, src]);
-  const scale = fitScale(angle, box?.w ?? 303, box?.h ?? 106);
+  const scale = fitScale(angle, box.w, box.h);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const wrap = wrapRef.current;
     if (!wrap) return;
     const measure = () => {
@@ -74,9 +76,9 @@ export function StampBox({
     return () => observer.disconnect();
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !box || fallback) return;
+    if (!canvas || fallback) return;
     const printer = getSilkscreenPrinter();
     if (!printer) {
       setFallback(true);
@@ -86,10 +88,6 @@ export function StampBox({
     const dpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
     const tw = Math.max(1, Math.round(box.w * dpr));
     const th = Math.max(1, Math.round(box.h * dpr));
-    const animate = printedSrc.current !== src;
-    printedSrc.current = src;
-    const ladder = animate ? PRINT_IN : ([1] as const);
-    let cancelled = false;
 
     const draw = (bitmap: ImageBitmap) => {
       canvas.width = bitmap.width;
@@ -100,29 +98,26 @@ export function StampBox({
       ctx.drawImage(bitmap, 0, 0);
     };
 
+    const finished = printer.peekStamp?.(src, tw, th, 1);
+    if (finished) {
+      draw(finished);
+      printedSrc.current = src;
+      setReady(true);
+      return;
+    }
+
+    printedSrc.current = src;
+    let cancelled = false;
+
     void (async () => {
-      for (let i = 0; i < ladder.length; i += 1) {
-        const bitmap = await printer.printStamp(
-          src,
-          tw,
-          th,
-          ladder[i],
-          true,
-        );
-        if (cancelled) return;
-        if (!bitmap) {
-          setFallback(true);
-          return;
-        }
-        draw(bitmap);
-        setReady(true);
-        if (i < ladder.length - 1) {
-          await new Promise((resolve) =>
-            window.setTimeout(resolve, PRINT_IN_MS[i]),
-          );
-          if (cancelled) return;
-        }
+      const bitmap = await printer.printStamp(src, tw, th, 1, true);
+      if (cancelled) return;
+      if (!bitmap) {
+        setFallback(true);
+        return;
       }
+      draw(bitmap);
+      setReady(true);
     })();
 
     return () => {

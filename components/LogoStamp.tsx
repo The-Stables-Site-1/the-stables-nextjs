@@ -3,8 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
   getSilkscreenPrinter,
-  PRESS_IN,
-  PRESS_IN_MS,
   stampBoxSize,
 } from "@/lib/silkscreen-gl";
 import { STAMP_PAD, type StampPlacement } from "@/lib/stamp-field";
@@ -41,25 +39,18 @@ export function LogoStamp({ placement }: LogoStampProps) {
     let cancelled = false;
 
     void (async () => {
-      for (let i = 0; i < PRESS_IN.length; i += 1) {
-        const ok = await printer.stampLogo(canvas, placement.src, {
-          artW: placement.w * dpr,
-          artH: placement.h * dpr,
-          angle: placement.angle,
-          progress: PRESS_IN[i],
-          pressure: placement.pressure,
-          seed: placement.seed,
-          grain: GRAIN * dpr,
-          ink: placement.ink,
-        });
-        if (cancelled || !ok) return;
-        setReady(true);
-        const hold = PRESS_IN_MS[i];
-        if (hold) {
-          await new Promise((resolve) => window.setTimeout(resolve, hold));
-          if (cancelled) return;
-        }
-      }
+      const ok = await printer.stampLogo(canvas, placement.src, {
+        artW: placement.w * dpr,
+        artH: placement.h * dpr,
+        angle: placement.angle,
+        progress: 1,
+        pressure: placement.pressure,
+        seed: placement.seed,
+        grain: GRAIN * dpr,
+        ink: placement.ink,
+      });
+      if (cancelled || !ok) return;
+      setReady(true);
     })();
 
     return () => {
@@ -82,7 +73,7 @@ export function LogoStamp({ placement }: LogoStampProps) {
         width={pixelW}
         height={pixelH}
         aria-hidden
-        className={`h-full w-full ${ready ? "opacity-100" : "opacity-0"}`}
+        className={`h-full w-full object-contain ${ready ? "opacity-100" : "opacity-0"}`}
       />
     </div>
   );

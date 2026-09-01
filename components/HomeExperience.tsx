@@ -15,19 +15,19 @@ import {
   ITEM_STAGGER_OUT_MS,
   LOGO_HOLD_MS,
   MORPH_MS,
+  STAMP_ART_H,
+  STAMP_ART_W,
 } from "@/lib/morph";
 import type { Partner } from "@/lib/partners";
 import {
   disposeSilkscreenPrinter,
   getSilkscreenPrinter,
-  PRINT_IN,
-  PRINT_IN_MS,
-  UNPRINT,
-  UNPRINT_MS,
+  peekPrinted,
   type SilkscreenPrinter,
 } from "@/lib/silkscreen-gl";
 import { site } from "@/lib/site";
 import {
+  placeOneStamp,
   planStampField,
   type StampLogo,
   type StampPlacement,
@@ -46,14 +46,12 @@ const MODULE_COUNT = 3;
 /** Set to true to restore the horse intro loader. */
 const SHOW_HORSE_LOADER = false;
 
-const LINGER_MS = 150;
 const IDLE_MS = 4000;
-const MAX_PLATES = 8;
 
 /** Idle stamping cadence: one impression at a time, never lifted. */
 const STAMP_GAP_MS = 1500;
 /** Ceiling on accumulated impressions, so the page cannot grow forever. */
-const MAX_STAMPS = 48;
+const MAX_STAMPS = 16;
 
 const randomSeed = () => (Math.random() * 0xffffffff) >>> 0;
 
@@ -106,6 +104,7 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
     hasAppBooted() ? MODULE_COUNT : 0,
   );
   const addressRef = useRef<HTMLDivElement>(null);
+  const asideRef = useRef<HTMLElement>(null);
   const introTimersRef = useRef<number[]>([]);
   const [activeSlug, setActiveSlug] = useState<string | null>(null);
   const [locked, setLocked] = useState(false);
@@ -115,16 +114,10 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
   const [morphLogo, setMorphLogo] = useState(false);
   const [plates, setPlates] = useState<Plate[]>([]);
   const [stamps, setStamps] = useState<StampInstance[]>([]);
-  const currentPlateIdRef = useRef<number | null>(null);
   const nextPlateIdRef = useRef(1);
-  const lingerTimersRef = useRef<Map<number, number>>(new Map());
-  const deadIdsRef = useRef(new Set<number>());
   const morphTimersRef = useRef<number[]>([]);
   const lockedRef = useRef(false);
   const printerRef = useRef<SilkscreenPrinter | null>(null);
-  const urlByIdRef = useRef<Map<number, string>>(new Map());
-  const progressByIdRef = useRef<Map<number, number>>(new Map());
-  const stopInRef = useRef(new Set<number>());
   const idleTimerRef = useRef(0);
   const stampTimerRef = useRef(0);
   const stampRunRef = useRef(0);
@@ -138,86 +131,24 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
   const armIdleRef = useRef(() => {});
   const router = useRouter();
 
-  const clearLinger = (id: number) => {
-    const timer = lingerTimersRef.current.get(id);
-    if (timer) window.clearTimeout(timer);
-    lingerTimersRef.current.delete(id);
-  };
-
-  const setPlateSrc = (id: number, bitmap: ImageBitmap) => {
-    setPlates((current) =>
-      current.map((plate) => (plate.id === id ? { ...plate, bitmap } : plate)),
-    );
-  };
-
-  const removePlate = (id: number) => {
-    deadIdsRef.current.add(id);
-    stopInRef.current.add(id);
-    clearLinger(id);
-    urlByIdRef.current.delete(id);
-    progressByIdRef.current.delete(id);
-    setPlates((current) => current.filter((plate) => plate.id !== id));
-  };
-
-  const unprintPlate = (id: number) => {
-    stopInRef.current.add(id);
-    clearLinger(id);
-    const url = urlByIdRef.current.get(id);
-    const printer = printerRef.current;
-    if (!url || !printer) {
-      removePlate(id);
-      return;
-    }
-
-    void (async () => {
-      const from = progressByIdRef.current.get(id) ?? 1;
-      const steps = UNPRINT.filter((progress) => progress < from - 0.03);
-      const ladder = steps.length ? steps : [0];
-      await Promise.all(
-        ladder.map((progress) => printer.print(url, progress, 0, true)),
-      );
-      for (let i = 0; i < ladder.length; i += 1) {
-        if (deadIdsRef.current.has(id) || lockedRef.current) return;
-        const src = printer.peek(url, ladder[i], 0);
-        if (!src) continue;
-        progressByIdRef.current.set(id, ladder[i]);
-        setPlateSrc(id, src);
-        await new Promise((resolve) =>
-          window.setTimeout(resolve, UNPRINT_MS[Math.min(i, UNPRINT_MS.length - 1)]),
-        );
-      }
-      if (!deadIdsRef.current.has(id) && !lockedRef.current) removePlate(id);
-    })();
-  };
-
-  const lingerPlate = (id: number) => {
-    stopInRef.current.add(id);
-    clearLinger(id);
-    const timer = window.setTimeout(() => {
-      lingerTimersRef.current.delete(id);
-      unprintPlate(id);
-    }, LINGER_MS);
-    lingerTimersRef.current.set(id, timer);
-  };
-
   useEffect(() => {
     const printer = getSilkscreenPrinter();
     printerRef.current = printer;
     if (!printer) return;
-    for (const partner of partners) {
-      const url = partner.images[0];
-      if (url) void printer.print(url, PRINT_IN[0], 0);
-    }
 
     let alive = true;
-    const seen = new Set<string>();
     void (async () => {
+      const sizeBySrc = new Map<string, { w: number; h: number }>();
       for (const partner of partners) {
-        if (!partner.stampLogo || seen.has(partner.stampLogo)) continue;
-        seen.add(partner.stampLogo);
-        const size = await printer.preload(partner.stampLogo);
-        if (!alive) return;
-        if (!size) continue;
+        if (!partner.stampLogo) continue;
+        let size = sizeBySrc.get(partner.stampLogo);
+        if (!size) {
+          const loaded = await printer.preload(partner.stampLogo);
+          if (!alive) return;
+          if (!loaded) continue;
+          size = loaded;
+          sizeBySrc.set(partner.stampLogo, size);
+        }
         logosRef.current = [
           ...logosRef.current,
           {
@@ -240,8 +171,6 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
       morphTimersRef.current.forEach((timer) => window.clearTimeout(timer));
       window.clearTimeout(idleTimerRef.current);
       window.clearTimeout(stampTimerRef.current);
-      lingerTimersRef.current.forEach((timer) => window.clearTimeout(timer));
-      lingerTimersRef.current.clear();
       // Partner pages reuse the printer during their morph. All other routes
       // should release its full-screen bitmap cache and GPU context.
       if (!lockedRef.current) disposeSilkscreenPrinter();
@@ -356,82 +285,61 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
   const partnerStart = partnerTitleAt + 1;
   const contactStart = partnerStart + partners.length;
 
-  const pushPlate = (plate: Plate) => {
-    setPlates((current) => {
-      const kept =
-        current.length >= MAX_PLATES ? current.slice(-(MAX_PLATES - 1)) : current;
-      if (kept.length < current.length) {
-        const keptIds = new Set(kept.map((item) => item.id));
-        current.forEach((item) => {
-          if (!keptIds.has(item.id)) clearLinger(item.id);
-        });
-      }
-      return [...kept, plate];
+  const stampViewport = () => {
+    const column = asideRef.current?.getBoundingClientRect();
+    return {
+      width: window.innerWidth,
+      height: window.innerHeight,
+      seed: randomSeed(),
+      avoid: column
+        ? { x: column.left, y: column.top, w: column.width, h: column.height }
+        : null,
+    };
+  };
+
+  const pressStamp = (logo: StampLogo) => {
+    const placement = placeOneStamp({ logo, ...stampViewport() });
+    if (!placement) return;
+    const id = nextStampIdRef.current;
+    nextStampIdRef.current += 1;
+    setStamps((current) => {
+      const next = [...current, { id, placement }];
+      const trimmed =
+        next.length > MAX_STAMPS ? next.slice(-MAX_STAMPS) : next;
+      stampCountRef.current = trimmed.length;
+      return trimmed;
     });
   };
 
   const handleHover = (slug: string | null) => {
     if (slug === activeSlug) return;
-
-    if (currentPlateIdRef.current != null) {
-      if (slug) lingerPlate(currentPlateIdRef.current);
-      else unprintPlate(currentPlateIdRef.current);
-      currentPlateIdRef.current = null;
-    }
-
     setActiveSlug(slug);
     if (!slug) return;
+    router.prefetch(`/partners/${slug}`);
 
-    const url = partners.find((partner) => partner.slug === slug)?.images[0];
-    if (!url) return;
+    const partner = partners.find((item) => item.slug === slug);
+    if (!partner?.stampLogo) return;
 
-    const id = nextPlateIdRef.current;
-    nextPlateIdRef.current += 1;
-    currentPlateIdRef.current = id;
-    urlByIdRef.current.set(id, url);
-    stopInRef.current.delete(id);
-    progressByIdRef.current.set(id, 0);
+    const existing =
+      logosRef.current.find((item) => item.slug === slug) ??
+      logosRef.current.find((item) => item.src === partner.stampLogo);
+    if (existing) {
+      pressStamp({ ...existing, slug: partner.slug, name: partner.name });
+      return;
+    }
 
     void (async () => {
-      const printer = printerRef.current;
-      if (!printer) return;
-      await Promise.all(
-        PRINT_IN.map((progress) => printer.print(url, progress, 0, true)),
-      );
-      if (
-        stopInRef.current.has(id) ||
-        deadIdsRef.current.has(id) ||
-        lockedRef.current
-      ) {
-        return;
-      }
-      for (const progress of UNPRINT) void printer.print(url, progress, 0);
-      for (let i = 0; i < PRINT_IN.length; i += 1) {
-        if (
-          stopInRef.current.has(id) ||
-          deadIdsRef.current.has(id) ||
-          lockedRef.current
-        ) {
-          return;
-        }
-        const src = printer.peek(url, PRINT_IN[i], 0);
-        if (!src) continue;
-        progressByIdRef.current.set(id, PRINT_IN[i]);
-        if (i === 0) {
-          pushPlate({ id, slug, url, bitmap: src });
-        } else {
-          setPlateSrc(id, src);
-        }
-        await new Promise((resolve) =>
-          window.setTimeout(resolve, PRINT_IN_MS[i]),
-        );
-      }
+      const size = await printerRef.current?.preload(partner.stampLogo);
+      if (!size || activeSlugRef.current !== slug) return;
+      const logo = {
+        slug: partner.slug,
+        name: partner.name,
+        src: partner.stampLogo,
+        aspect: size.w / Math.max(size.h, 1),
+      };
+      logosRef.current = [...logosRef.current, logo];
+      pressStamp(logo);
     })();
-  };
-
-  const clearStamps = () => {
-    stampCountRef.current = 0;
-    setStamps((current) => (current.length ? [] : current));
   };
 
   const stopIdle = () => {
@@ -440,7 +348,6 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
     idleTimerRef.current = 0;
     stampTimerRef.current = 0;
     stampRunRef.current += 1;
-    clearStamps();
   };
 
   /**
@@ -449,23 +356,22 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
    */
   const runStampField = () => {
     const run = stampRunRef.current;
-    const viewport = () => ({
-      logos: logosRef.current,
-      width: window.innerWidth,
-      height: window.innerHeight,
-      seed: randomSeed(),
-    });
 
-    let plan = planStampField(viewport());
-    if (!plan.length) return;
+    let plan: StampPlacement[] = [];
     let index = 0;
 
     const pressNext = () => {
       if (stampRunRef.current !== run || lockedRef.current) return;
+      if (document.hidden) return;
       if (stampCountRef.current >= MAX_STAMPS) return;
 
+      if (!logosRef.current.length) {
+        stampTimerRef.current = window.setTimeout(pressNext, 400);
+        return;
+      }
+
       if (index >= plan.length) {
-        plan = planStampField(viewport());
+        plan = planStampField({ logos: logosRef.current, ...stampViewport() });
         index = 0;
         if (!plan.length) return;
       }
@@ -484,7 +390,7 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
 
   const armIdle = () => {
     stopIdle();
-    if (lockedRef.current || activeSlugRef.current) return;
+    if (lockedRef.current || activeSlugRef.current || document.hidden) return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     const run = stampRunRef.current;
     idleTimerRef.current = window.setTimeout(() => {
@@ -494,7 +400,6 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
   };
 
   const onPartnerHover = (slug: string | null) => {
-    // Wipe the sheet on the spot; the idle effect re-arms once the hover ends.
     if (slug) stopIdle();
     handleHover(slug);
   };
@@ -519,28 +424,28 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
       return;
     }
 
-    lingerTimersRef.current.forEach((timer) => window.clearTimeout(timer));
-    lingerTimersRef.current.clear();
-
-    // The halftone plate stays exactly where it is; only the modules move.
-    setPlates((current) => {
-      const latest = [...current].reverse().find((plate) => plate.slug === slug);
-      if (latest) {
-        currentPlateIdRef.current = latest.id;
-        return [latest];
-      }
-
-      const bitmap = printerRef.current?.peek(url);
-      if (!bitmap) return current;
+    const bitmap = peekPrinted(url);
+    if (bitmap) {
       const id = nextPlateIdRef.current;
       nextPlateIdRef.current += 1;
-      currentPlateIdRef.current = id;
-      urlByIdRef.current.set(id, url);
-      return [{ id, slug, url, bitmap }];
-    });
+      setPlates([{ id, slug, url, bitmap }]);
+    }
 
     router.prefetch(href);
     setMorphPartner(partner);
+
+    const dpr = Math.min(window.devicePixelRatio || 1, 1.25);
+    const tw = Math.max(1, Math.round(STAMP_ART_W * dpr));
+    const th = Math.max(1, Math.round(STAMP_ART_H * dpr));
+    if (partner.stampLogo) {
+      void printerRef.current?.printStamp(
+        partner.stampLogo,
+        tw,
+        th,
+        1,
+        true,
+      );
+    }
 
     const after = (ms: number, run: () => void) => {
       morphTimersRef.current.push(window.setTimeout(run, ms));
@@ -568,12 +473,20 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
     armIdleRef.current = armIdle;
   });
 
-  // Hovering a partner is the only thing that wipes the sheet: it sets
-  // activeSlug, which tears the loop down here and restarts it on hover out.
+  // Hovering pauses idle stamping; impressions stay on the sheet and the
+  // loop restarts once the pointer leaves. Hidden tabs do not keep printing.
   useEffect(() => {
     if (phase !== "ready" || locked) return;
-    armIdleRef.current();
-    return () => stopIdleRef.current();
+    const onVis = () => {
+      if (document.hidden) stopIdleRef.current();
+      else armIdleRef.current();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    if (!document.hidden) armIdleRef.current();
+    return () => {
+      document.removeEventListener("visibilitychange", onVis);
+      stopIdleRef.current();
+    };
   }, [phase, locked, activeSlug]);
 
   const interactive = !locked && phase !== "loader" && phase !== "hero";
@@ -647,13 +560,17 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
       </div>
 
       <div
-        className={`relative z-10 flex min-h-screen justify-center ${
+        className={`relative z-10 flex min-h-screen items-center justify-center ${
           phase === "loader" ? "opacity-0" : "opacity-100"
         }`}
       >
-        <aside className="flex w-full max-w-[375px] flex-col space-y-[-1px] px-5 py-5 max-[599px]:max-w-none">
+        <aside
+          ref={asideRef}
+          className="flex w-full max-w-[375px] flex-col space-y-[-1px] px-5 py-5 max-[599px]:max-w-none"
+        >
           <div
             ref={addressRef}
+            className="order-1"
             style={{ visibility: addressIn ? "visible" : "hidden" }}
           >
             <AddressBox
@@ -663,14 +580,23 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
             />
           </div>
 
-          <div style={{ visibility: modulesIn > 0 ? "visible" : "hidden" }}>
+          <div
+            className={morphing ? "order-3" : "order-2"}
+            style={{ visibility: modulesIn > 0 ? "visible" : "hidden" }}
+          >
             {infoBox}
           </div>
-          <div style={{ visibility: modulesIn > 1 ? "visible" : "hidden" }}>
+          <div
+            className={morphing ? "order-2" : "order-3"}
+            style={{ visibility: modulesIn > 1 ? "visible" : "hidden" }}
+          >
             {partnersList}
           </div>
 
-          <div style={{ visibility: modulesIn > 2 ? "visible" : "hidden" }}>
+          <div
+            className="order-4"
+            style={{ visibility: modulesIn > 2 ? "visible" : "hidden" }}
+          >
             <ContactLinks
               revealedCount={
                 morphPartner
