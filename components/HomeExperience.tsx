@@ -651,7 +651,7 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
           phase === "loader" ? "opacity-0" : "opacity-100"
         }`}
       >
-        <aside className="flex w-full max-w-[375px] flex-col gap-[6px] px-5 py-5 max-[599px]:max-w-none">
+        <aside className="flex w-full max-w-[375px] flex-col space-y-[-1px] px-5 py-5 max-[599px]:max-w-none">
           <div
             ref={addressRef}
             style={{ visibility: addressIn ? "visible" : "hidden" }}

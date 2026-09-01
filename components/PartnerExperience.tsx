@@ -129,7 +129,7 @@ export function PartnerExperience({ partner }: PartnerExperienceProps) {
 
       <div className="pointer-events-none absolute inset-0 z-20">
         <aside className="pointer-events-none absolute top-0 inset-x-0 mx-auto flex h-full max-h-full w-full max-w-[375px] flex-col px-5 py-5 max-[599px]:max-w-none">
-          <div className="pointer-events-auto flex max-h-full flex-col gap-[6px] overflow-y-auto overscroll-none">
+          <div className="pointer-events-auto flex max-h-full flex-col overflow-y-auto overscroll-none">
             <div className="shrink-0">
               <AddressBox
                 collapsed={collapsed}
@@ -138,7 +138,7 @@ export function PartnerExperience({ partner }: PartnerExperienceProps) {
               />
             </div>
 
-            <div className="shrink-0">
+            <div className="relative z-[1] shrink-0 -mt-px">
               <InfoBox
                 body={
                   homeContent ? site.information : partner.description
@@ -149,7 +149,7 @@ export function PartnerExperience({ partner }: PartnerExperienceProps) {
               />
             </div>
 
-            <div className="shrink-0">
+            <div className="relative z-[1] shrink-0 -mt-px">
               <PartnersList
                 partners={allPartners}
                 collapsed={collapsed}
@@ -169,7 +169,7 @@ export function PartnerExperience({ partner }: PartnerExperienceProps) {
               />
             </div>
 
-            <div className="shrink-0">
+            <div className="relative z-[1] shrink-0 -mt-px">
               <ContactLinks
                 title={homeContent ? "CONTACT" : "INQUIRE"}
                 rows={
