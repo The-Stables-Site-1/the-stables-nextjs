@@ -60,7 +60,7 @@ export const partners: Partner[] = [
     name: "Nature of Things",
     description:
       "NATURE OF THINGS crafts plant-forward wellness products rooted in botanical intelligence and sensory design.",
-    stampLogo: PLACEHOLDER_LOGO,
+    stampLogo: "/partners/nature-of-things/logo.png",
     images: [
       "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/nature-of-things/hero.jpeg",
       "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/nature-of-things/gallery/02.jpeg",
@@ -106,7 +106,7 @@ export const partners: Partner[] = [
     name: "The Grey",
     description:
       "THE GREY is a distinctive lifestyle and wellness brand built around quiet luxury and intentional living.",
-    stampLogo: PLACEHOLDER_LOGO,
+    stampLogo: "/partners/the-grey/logo.png",
     images: [
       "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/the-grey/hero.jpeg",
       "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/the-grey/gallery/01.jpeg",
@@ -142,30 +142,11 @@ export const partners: Partner[] = [
     },
   },
   {
-    slug: "uniform",
-    name: "Uniform",
-    description:
-      "UNIFORM creates considered products for daily wear and ritual, with a focus on clarity and consistency.",
-    stampLogo: PLACEHOLDER_LOGO,
-    images: [
-      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/uniform/hero.jpeg",
-      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/uniform/gallery/01.jpeg",
-      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/uniform/gallery/02.jpeg",
-      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/uniform/gallery/03.jpeg",
-      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/uniform/gallery/04.jpeg",
-    ],
-    links: {
-      wholesale: "/contact",
-      instagram: "https://instagram.com/",
-      website: "#",
-    },
-  },
-  {
     slug: "vacation",
     name: "Vacation",
     description:
       "VACATION is a sun-care and lifestyle brand built around leisure, nostalgia, and high-performance formulas.",
-    stampLogo: PLACEHOLDER_LOGO,
+    stampLogo: "/partners/vacation/logo.png",
     images: [
       "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/vacation/hero.jpeg",
       "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/vacation/gallery/02.jpeg",
