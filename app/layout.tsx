@@ -6,7 +6,7 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "The Stables",
   description:
-    "THE STABLES is a high-touch external commercial team for distinctive beauty, fragrance, wellness, and lifestyle brands.",
+    "THE STABLES is a New York-based external commercial team and operating layer for premium beauty, fragrance, wellness, and lifestyle brands building stronger retail distribution.",
 };
 
 export default function RootLayout({
