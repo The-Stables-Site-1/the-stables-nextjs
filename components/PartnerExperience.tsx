@@ -159,9 +159,10 @@ export function PartnerExperience({ partner }: PartnerExperienceProps) {
             >
               <InfoBox
                 body={
-                  homeContent ? site.information : partner.description
+                  homeContent ? site.informationBox : partner.description
                 }
                 moreHref={homeContent ? "/about" : undefined}
+                fit={homeContent}
                 open={detailOpen}
                 onOpenChange={setDetailOpen}
               />
