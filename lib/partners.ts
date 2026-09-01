@@ -24,10 +24,11 @@ export const partners: Partner[] = [
       "DEDCOOL is a genderless, vegan, non-toxic fragrance house built on making life smell good. We translate signature scents, embedding fragrance in daily products from perfume to detergent and dryer sheets.",
     stampLogo: PLACEHOLDER_LOGO,
     images: [
-      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/dedcool/gallery/02.jpeg",
-      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/dedcool/gallery/03.jpeg",
-      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/dedcool/gallery/04.jpeg",
-      "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/dedcool/gallery/05.jpeg",
+      "/partners/dedcool/hero.jpg",
+      "/partners/dedcool/gallery/01.jpg",
+      "/partners/dedcool/gallery/02.jpg",
+      "/partners/dedcool/gallery/03.jpg",
+      "/partners/dedcool/gallery/04.jpg",
     ],
     links: {
       wholesale: "/contact",
