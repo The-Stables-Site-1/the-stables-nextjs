@@ -7,6 +7,7 @@ export type Partner = {
   slug: string;
   name: string;
   description: string;
+  descriptionBlocks?: readonly string[];
   stampLogo: string;
   images: string[];
   links: {
@@ -21,7 +22,7 @@ export const partners: Partner[] = [
     slug: "dedcool",
     name: "DedCool",
     description:
-      "DEDCOOL is a genderless, vegan, non-toxic fragrance house built on making life smell good. We translate signature scents, embedding fragrance in daily products from perfume to detergent and dryer sheets.",
+      "DedCool is a functional fragrance brand that empowers all people to smell and feel good through scent. The brand is on a mission to reshape the way fragrance is defined and experienced, built on the belief that everyone should have a signature scent that extends beyond a glass bottle. DedCool brings fragrance into everyday routines through unexpected mediums — from laundry detergent, to car air fresheners, and pets — so scent becomes a practical, integrated part of daily life.",
     stampLogo: PLACEHOLDER_LOGO,
     images: [
       "/partners/dedcool/hero.jpg",
@@ -39,7 +40,7 @@ export const partners: Partner[] = [
     slug: "facile",
     name: "Facile",
     description:
-      "FACILE creates refined skincare and body care with a focus on everyday ritual and elevated essentials.",
+      "Facile is a simplified, clinically kind, dermatologist-formulated approach to happy skin. Built on the belief that good skincare should work for everyone, Facile is made with doctor-led, proven ingredients that are non-toxic, effective, and feel-good. With intentional formulations and clinical results, achieving good skin is finally easy.",
     stampLogo: "/partners/facile/logo.png",
     images: [
       "/partners/facile/hero.jpg",
@@ -58,7 +59,7 @@ export const partners: Partner[] = [
     slug: "nature-of-things",
     name: "Nature of Things",
     description:
-      "NATURE OF THINGS crafts plant-forward wellness products rooted in botanical intelligence and sensory design.",
+      "Nature of Things sets a new standard of clean, using natural origin and plant-based ingredients to deliver high-performance results for the whole family. The brand uses the best of nature to get the best of performance, formulating with non-toxic ingredients that are gentle yet effective and chosen with long-term skin and hair health in mind. Built on a commitment to transparency, Nature of Things lets you decide what works for you. It's just the nature of things.",
     stampLogo: "/partners/nature-of-things/logo.png",
     images: [
       "/partners/nature-of-things/hero.jpeg",
@@ -77,7 +78,7 @@ export const partners: Partner[] = [
     slug: "sky-high-farm-goods",
     name: "Sky High Farm Goods",
     description:
-      "SKY HIGH FARM GOODS brings farm-driven goods and regenerative agriculture into everyday beauty and lifestyle.",
+      "Sky High Farm Goods is a mission-led lifestyle brand built to support the work of Sky High Farm, a nonprofit working farm that ensures everyone has access to high-quality, culturally appropriate food. Inspired by the land and those who steward it, the brand draws on deep relationships with the farmers who grow its ingredients and their generational knowledge of the land. Its formulations, scent profiles, and palettes evoke fresh produce and the earth, using regeneratively grown ingredients picked at peak potency, with the belief that beauty is nature's eternal wisdom and, in nature, every process fuels another.",
     stampLogo: "/partners/sky-high-farm-goods/logo.png",
     images: [
       "/partners/sky-high-farm-goods/hero.jpeg",
