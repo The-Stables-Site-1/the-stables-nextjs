@@ -135,7 +135,7 @@ export const partners: Partner[] = [
     slug: "vacation",
     name: "Vacation",
     description:
-      "VACATION is a sun-care and lifestyle brand built around leisure, nostalgia, and high-performance formulas.",
+      "Vacation is a sun-care and lifestyle brand that takes leisure as seriously as protection. Every Vacation sunscreen is made according to the brand's proprietary \"Leisure-Enhancing\" formulation process, updating everything you love about the sunscreens of the past with the best of modern skincare science: tried-and-true ingredients with proven efficacy, formulated to guidelines set by today's leading experts, and finished with a sensorial experience designed to transport you straight to paradise. The result is \"Excessively Good\" sunscreen for those who demand the best from life.",
     stampLogo: "/partners/vacation/logo.png",
     images: [
       "/partners/vacation/hero.jpg",
@@ -160,7 +160,7 @@ export const partners: Partner[] = [
     slug: "zure-solaris",
     name: "Zure Solaris",
     description:
-      "ZURE SOLARIS explores light, scent, and ritual through distinctive beauty and wellness products.",
+      "Zure Solaris is the world's first sun repair brand, addressing what protection cannot: the repair and reversal of sun-induced damage. While SPF has become a daily essential, the post-sun category has remained focused on short-term rescue. Zure Solaris was created to redefine that space, positioning sun repair as the essential next step in the modern skincare routine. Powered by its proprietary Solar Repair Complex, the collection restores sun-stressed skin so it can safely receive clinically active ingredients, delivering clinically validated improvements in elasticity, barrier function, and fine lines.",
     stampLogo: "/partners/zure-solaris/logo.png",
     images: [
       "/partners/zure-solaris/hero.png",
