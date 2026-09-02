@@ -14,6 +14,8 @@ type InfoBoxProps = {
   opaque?: boolean;
   /** Grow with the copy instead of clipping to the stamp-module height. */
   fit?: boolean;
+  /** First-line indent on paragraphs after the first; no extra vertical gap. */
+  indent?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   collapsedHeight?: number;
@@ -30,6 +32,7 @@ export function InfoBox({
   showBody = true,
   opaque = false,
   fit = false,
+  indent = false,
   open,
   onOpenChange,
   collapsedHeight = PARTNER_ROW_H + BOX_BORDER,
@@ -77,9 +80,9 @@ export function InfoBox({
       </button>
       {body ? (
         <div
-          className={`info-box-prose px-3 py-3 text-[12px] leading-tight ${
-            showBody ? "opacity-100" : "opacity-0"
-          }`}
+          className={`px-3 py-3 text-[12px] leading-normal [&_p]:m-0 ${
+            indent ? "[&_p+p]:indent-6" : ""
+          } ${showBody ? "opacity-100" : "opacity-0"}`}
         >
           {(typeof body === "string" ? [body] : body).map((paragraph, i, all) => (
             <p key={i}>
@@ -87,10 +90,7 @@ export function InfoBox({
               {moreHref && i === all.length - 1 ? (
                 <>
                   {" "}
-                  <Link
-                    href={moreHref}
-                    className="tracking-[0px] underline underline-offset-2"
-                  >
+                  <Link href={moreHref} className="underline underline-offset-2">
                     {moreLabel}
                   </Link>
                 </>

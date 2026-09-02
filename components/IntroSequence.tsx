@@ -155,7 +155,7 @@ export function IntroSequence({ rect, line, onTurn, onLand }: IntroSequenceProps
           className={`${face} overflow-hidden border-[0.75px] border-ink bg-cream`}
         >
           {full ? (
-            <p className="absolute inset-0 m-0 flex flex-wrap content-center items-center justify-center gap-x-[0.3em] gap-y-[0.15em] px-[8vw] text-center text-[12px] leading-tight tracking-[0.01em] indent-0 text-black">
+            <p className="absolute inset-0 m-0 flex flex-wrap content-center items-center justify-center gap-x-[0.3em] gap-y-[0.15em] px-[8vw] text-center text-[12px] leading-normal tracking-[0.02em] text-black">
               {words.map((word, i) => (
                 <span
                   key={`${word}-${i}`}
