@@ -59,7 +59,7 @@ export const partners: Partner[] = [
     slug: "nature-of-things",
     name: "Nature of Things",
     description:
-      "NATURE OF THINGS crafts plant-forward wellness products rooted in botanical intelligence and sensory design.",
+      "Nature of Things sets a new standard of clean, using natural origin and plant-based ingredients to deliver high-performance results for the whole family. The brand uses the best of nature to get the best of performance, formulating with non-toxic ingredients that are gentle yet effective and chosen with long-term skin and hair health in mind. Built on a commitment to transparency, Nature of Things lets you decide what works for you. It's just the nature of things.",
     stampLogo: "/partners/nature-of-things/logo.png",
     images: [
       "/partners/nature-of-things/hero.jpeg",
