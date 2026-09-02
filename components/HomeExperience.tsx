@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import Image, { getImageProps } from "next/image";
 import { useRouter } from "next/navigation";
 import { AddressBox } from "@/components/AddressBox";
 import { ContactLinks, partnerContactRows } from "@/components/ContactLinks";
@@ -11,10 +12,9 @@ import { LogoStamp } from "@/components/LogoStamp";
 import { PartnersList } from "@/components/PartnersList";
 import { hasAppBooted, markAppBooted } from "@/lib/boot";
 import {
-  HEADER_OFF_MS,
-  ITEM_STAGGER_OUT_MS,
   LOGO_HOLD_MS,
-  MORPH_MS,
+  ROUTE_MORPH_EASE,
+  ROUTE_MORPH_MS,
   STAMP_ART_H,
   STAMP_ART_W,
 } from "@/lib/morph";
@@ -22,12 +22,9 @@ import type { Partner } from "@/lib/partners";
 import {
   disposeSilkscreenPrinter,
   getSilkscreenPrinter,
-  peekPrinted,
-  type SilkscreenPrinter,
 } from "@/lib/silkscreen-gl";
 import { site } from "@/lib/site";
 import {
-  placeOneStamp,
   planStampField,
   type StampLogo,
   type StampPlacement,
@@ -43,6 +40,8 @@ const BOX_REVEAL = 4;
 const ADDRESS_REVEAL = BOX_REVEAL + 1;
 /** Information, partners, contact: the three modules under the address box. */
 const MODULE_COUNT = 3;
+/** Header plus three rows in the home Contact module. */
+const CONTACT_REVEAL_STEPS = 4;
 /** Set to true to restore the horse intro loader. */
 const SHOW_HORSE_LOADER = false;
 
@@ -55,42 +54,22 @@ const MAX_STAMPS = 16;
 
 const randomSeed = () => (Math.random() * 0xffffffff) >>> 0;
 
-type Plate = {
-  id: number;
-  slug: string;
-  url: string;
-  bitmap: ImageBitmap;
-};
-
 type StampInstance = {
   id: number;
   placement: StampPlacement;
 };
-
-function StampCanvas({ bitmap }: { bitmap: ImageBitmap }) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    if (el.width !== bitmap.width || el.height !== bitmap.height) {
-      el.width = bitmap.width;
-      el.height = bitmap.height;
-    }
-    const ctx = el.getContext("2d", { alpha: true });
-    if (!ctx) return;
-    ctx.clearRect(0, 0, el.width, el.height);
-    ctx.drawImage(bitmap, 0, 0);
-  }, [bitmap]);
-  return <canvas ref={ref} className="h-full w-full object-cover" />;
-}
 
 type HomeExperienceProps = {
   partners: Partner[];
 };
 
 export function HomeExperience({ partners }: HomeExperienceProps) {
-  const contentSteps = 1 + 2 + 1 + partners.length + 4;
-  const maxReveal = 4 + contentSteps;
+  const infoTitleAt = ADDRESS_REVEAL + 1;
+  const infoBodyAt = infoTitleAt + 1;
+  const partnerTitleAt = infoBodyAt + 1;
+  const partnerStart = partnerTitleAt + 1;
+  const contactStart = partnerStart + partners.length;
+  const maxReveal = contactStart + CONTACT_REVEAL_STEPS - 1;
 
   const [phase, setPhase] = useState<Phase>(() =>
     hasAppBooted() ? "ready" : SHOW_HORSE_LOADER ? "loader" : "hero",
@@ -108,33 +87,31 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
   const introTimersRef = useRef<number[]>([]);
   const [activeSlug, setActiveSlug] = useState<string | null>(null);
   const [locked, setLocked] = useState(false);
+  const [logosReady, setLogosReady] = useState(false);
   const [morphPartner, setMorphPartner] = useState<Partner | null>(null);
-  const [listVisible, setListVisible] = useState<number | null>(null);
-  const [headerLabel, setHeaderLabel] = useState(true);
-  const [morphLogo, setMorphLogo] = useState(false);
-  const [plates, setPlates] = useState<Plate[]>([]);
+  const [previewSlug, setPreviewSlug] = useState<string | null>(null);
   const [stamps, setStamps] = useState<StampInstance[]>([]);
-  const nextPlateIdRef = useRef(1);
   const morphTimersRef = useRef<number[]>([]);
   const lockedRef = useRef(false);
-  const printerRef = useRef<SilkscreenPrinter | null>(null);
   const idleTimerRef = useRef(0);
   const stampTimerRef = useRef(0);
   const stampRunRef = useRef(0);
   const stampCountRef = useRef(0);
   const nextStampIdRef = useRef(1);
   const logosRef = useRef<StampLogo[]>([]);
+  const heroPromisesRef = useRef(new Map<string, Promise<void>>());
+  const requestedPreviewRef = useRef<string | null>(null);
   const activeSlugRef = useRef<string | null>(null);
-  const partnersRef = useRef(partners);
-  const hoverRef = useRef<(slug: string | null) => void>(() => {});
   const stopIdleRef = useRef(() => {});
   const armIdleRef = useRef(() => {});
   const router = useRouter();
 
   useEffect(() => {
     const printer = getSilkscreenPrinter();
-    printerRef.current = printer;
-    if (!printer) return;
+    if (!printer) {
+      const fallbackReady = window.setTimeout(() => setLogosReady(true), 0);
+      return () => window.clearTimeout(fallbackReady);
+    }
 
     let alive = true;
     void (async () => {
@@ -149,6 +126,14 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
           size = loaded;
           sizeBySrc.set(partner.stampLogo, size);
         }
+        const dpr = Math.min(window.devicePixelRatio || 1, 1.25);
+        await printer.printStamp(
+          partner.stampLogo,
+          Math.max(1, Math.round(STAMP_ART_W * dpr)),
+          Math.max(1, Math.round(STAMP_ART_H * dpr)),
+          1,
+          true,
+        );
         logosRef.current = [
           ...logosRef.current,
           {
@@ -159,11 +144,45 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
           },
         ];
       }
+      if (alive) setLogosReady(true);
     })();
 
     return () => {
       alive = false;
     };
+  }, [partners]);
+
+  useEffect(() => {
+    const pending = new Map<string, Promise<void>>();
+    for (const partner of partners) {
+      const src = partner.images[0];
+      if (!src) continue;
+
+      const image = new window.Image();
+      image.decoding = "async";
+      const { props } = getImageProps({
+        src,
+        alt: "",
+        fill: true,
+        sizes: "100vw",
+      });
+      image.srcset = props.srcSet ?? "";
+      image.sizes = props.sizes ?? "100vw";
+      image.src = props.src;
+      const ready = image.decode().catch(
+        () =>
+          new Promise<void>((resolve) => {
+            if (image.complete) {
+              resolve();
+              return;
+            }
+            image.addEventListener("load", () => resolve(), { once: true });
+            image.addEventListener("error", () => resolve(), { once: true });
+          }),
+      );
+      pending.set(partner.slug, ready);
+    }
+    heroPromisesRef.current = pending;
   }, [partners]);
 
   useEffect(
@@ -195,13 +214,17 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
           setPhase("ready");
           return;
         }
+        const delay =
+          step === infoBodyAt || step === contactStart - 1
+            ? BEAT_MS
+            : CONTENT_STAGGER_MS;
         introTimersRef.current.push(
-          window.setTimeout(tick, CONTENT_STAGGER_MS),
+          window.setTimeout(tick, delay),
         );
       };
       introTimersRef.current.push(window.setTimeout(tick, CONTENT_PAUSE_MS));
     },
-    [maxReveal],
+    [contactStart, infoBodyAt, maxReveal],
   );
 
   useEffect(() => {
@@ -211,21 +234,26 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
       "(prefers-reduced-motion: reduce)",
     ).matches;
 
-    if (alreadyBooted || reduceMotion) {
+    if (alreadyBooted) {
       markAppBooted();
-      setReveal(maxReveal);
-      setAddressIn(true);
-      setModulesIn(MODULE_COUNT);
-      setPhase("ready");
       return;
+    }
+
+    if (reduceMotion) {
+      markAppBooted();
+      const revealAll = window.setTimeout(() => {
+        setReveal(maxReveal);
+        setAddressIn(true);
+        setModulesIn(MODULE_COUNT);
+        setPhase("ready");
+      }, 0);
+      return () => window.clearTimeout(revealAll);
     }
 
     if (!SHOW_HORSE_LOADER) {
-      setPhase("hero");
       return;
     }
 
-    setPhase("loader");
     const loader = window.setTimeout(() => setPhase("hero"), LOADER_MS);
     return () => window.clearTimeout(loader);
   }, [maxReveal]);
@@ -279,12 +307,6 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
   };
 
   const ready = phase === "ready";
-  const infoTitleAt = 6;
-  const infoBodyAt = infoTitleAt + 1;
-  const partnerTitleAt = infoBodyAt + 1;
-  const partnerStart = partnerTitleAt + 1;
-  const contactStart = partnerStart + partners.length;
-
   const stampViewport = () => {
     const column = asideRef.current?.getBoundingClientRect();
     return {
@@ -297,49 +319,21 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
     };
   };
 
-  const pressStamp = (logo: StampLogo) => {
-    const placement = placeOneStamp({ logo, ...stampViewport() });
-    if (!placement) return;
-    const id = nextStampIdRef.current;
-    nextStampIdRef.current += 1;
-    setStamps((current) => {
-      const next = [...current, { id, placement }];
-      const trimmed =
-        next.length > MAX_STAMPS ? next.slice(-MAX_STAMPS) : next;
-      stampCountRef.current = trimmed.length;
-      return trimmed;
-    });
-  };
-
-  const handleHover = (slug: string | null) => {
-    if (slug === activeSlug) return;
+  const handleHover = (slug: string) => {
+    if (slug === activeSlugRef.current) return;
+    stopIdle();
+    requestedPreviewRef.current = slug;
+    stampCountRef.current = 0;
+    setStamps([]);
     setActiveSlug(slug);
-    if (!slug) return;
     router.prefetch(`/partners/${slug}`);
 
-    const partner = partners.find((item) => item.slug === slug);
-    if (!partner?.stampLogo) return;
-
-    const existing =
-      logosRef.current.find((item) => item.slug === slug) ??
-      logosRef.current.find((item) => item.src === partner.stampLogo);
-    if (existing) {
-      pressStamp({ ...existing, slug: partner.slug, name: partner.name });
-      return;
-    }
-
-    void (async () => {
-      const size = await printerRef.current?.preload(partner.stampLogo);
-      if (!size || activeSlugRef.current !== slug) return;
-      const logo = {
-        slug: partner.slug,
-        name: partner.name,
-        src: partner.stampLogo,
-        aspect: size.w / Math.max(size.h, 1),
-      };
-      logosRef.current = [...logosRef.current, logo];
-      pressStamp(logo);
-    })();
+    const ready = heroPromisesRef.current.get(slug) ?? Promise.resolve();
+    void ready.then(() => {
+      if (requestedPreviewRef.current === slug && !lockedRef.current) {
+        setPreviewSlug(slug);
+      }
+    });
   };
 
   const stopIdle = () => {
@@ -371,7 +365,15 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
       }
 
       if (index >= plan.length) {
-        plan = planStampField({ logos: logosRef.current, ...stampViewport() });
+        const viewport = stampViewport();
+        plan = planStampField({ logos: logosRef.current, ...viewport });
+        if (!plan.length) {
+          plan = planStampField({
+            logos: logosRef.current,
+            ...viewport,
+            avoid: null,
+          });
+        }
         index = 0;
         if (!plan.length) return;
       }
@@ -400,8 +402,16 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
   };
 
   const onPartnerHover = (slug: string | null) => {
-    if (slug) stopIdle();
-    handleHover(slug);
+    if (slug) handleHover(slug);
+  };
+
+  const handleContainerLeave = () => {
+    if (lockedRef.current) return;
+    requestedPreviewRef.current = null;
+    activeSlugRef.current = null;
+    setActiveSlug(null);
+    setPreviewSlug(null);
+    armIdle();
   };
 
   const handleSelect = (slug: string) => {
@@ -415,66 +425,42 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
     setActiveSlug(slug);
 
     const url = partner.images[0] ?? null;
+    const heroReady =
+      heroPromisesRef.current.get(slug) ?? Promise.resolve();
     const reduceMotion = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
     ).matches;
 
-    if (!url || reduceMotion) {
+    if (!url) {
       router.push(href);
       return;
     }
 
-    const bitmap = peekPrinted(url);
-    if (bitmap) {
-      const id = nextPlateIdRef.current;
-      nextPlateIdRef.current += 1;
-      setPlates([{ id, slug, url, bitmap }]);
+    void heroReady.then(() => setPreviewSlug(slug));
+    if (reduceMotion) {
+      void heroReady.then(() => router.push(href));
+      return;
     }
 
-    router.prefetch(href);
     setMorphPartner(partner);
 
-    const dpr = Math.min(window.devicePixelRatio || 1, 1.25);
-    const tw = Math.max(1, Math.round(STAMP_ART_W * dpr));
-    const th = Math.max(1, Math.round(STAMP_ART_H * dpr));
-    if (partner.stampLogo) {
-      void printerRef.current?.printStamp(
-        partner.stampLogo,
-        tw,
-        th,
-        1,
-        true,
-      );
-    }
-
-    const after = (ms: number, run: () => void) => {
-      morphTimersRef.current.push(window.setTimeout(run, ms));
-    };
-
-    const total = partners.length;
-    for (let i = 0; i < total; i += 1) {
-      after(ITEM_STAGGER_OUT_MS * (i + 1), () => setListVisible(total - i - 1));
-    }
-
-    const rowsGone = ITEM_STAGGER_OUT_MS * total + HEADER_OFF_MS;
-    after(rowsGone, () => setHeaderLabel(false));
-
-    const logoAt = Math.max(rowsGone, MORPH_MS);
-    after(logoAt, () => setMorphLogo(true));
-    after(logoAt + LOGO_HOLD_MS, () => router.push(href));
+    morphTimersRef.current.push(
+      window.setTimeout(
+        () => void heroReady.then(() => router.push(href)),
+        ROUTE_MORPH_MS + LOGO_HOLD_MS,
+      ),
+    );
   };
 
   // Keep the idle loop pointed at the latest handlers without restarting it.
   useEffect(() => {
-    partnersRef.current = partners;
     activeSlugRef.current = activeSlug;
-    hoverRef.current = handleHover;
     stopIdleRef.current = stopIdle;
     armIdleRef.current = armIdle;
   });
 
-  // Hovering pauses idle stamping; impressions stay on the sheet and the
-  // loop restarts once the pointer leaves. Hidden tabs do not keep printing.
+  // A hero preview pauses idle work; leaving the whole content column clears
+  // it and starts a fresh idle delay. Hidden tabs do not keep printing.
   useEffect(() => {
     if (phase !== "ready" || locked) return;
     const onVis = () => {
@@ -489,8 +475,12 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
     };
   }, [phase, locked, activeSlug]);
 
-  const interactive = !locked && phase !== "loader" && phase !== "hero";
-  const hasPlates = plates.length > 0 || stamps.length > 0;
+  const interactive =
+    logosReady && !locked && phase !== "loader" && phase !== "hero";
+  const previewPartner = previewSlug
+    ? partners.find((partner) => partner.slug === previewSlug)
+    : null;
+  const hasVisuals = previewPartner != null || stamps.length > 0;
   const morphing = morphPartner != null;
 
   const infoBox = (
@@ -500,7 +490,7 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
         moreHref={morphPartner ? undefined : "/about"}
         showTitle={reveal >= infoTitleAt}
         showBody={reveal >= infoBodyAt}
-        opaque={ready || hasPlates}
+        opaque={ready || hasVisuals}
       />
     </div>
   );
@@ -511,18 +501,15 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
         partners={partners}
         showTitle={reveal >= partnerTitleAt}
         revealedCount={Math.max(0, reveal - (partnerStart - 1))}
-        opaque={ready || hasPlates}
+        opaque={ready || hasVisuals}
         activeSlug={activeSlug}
         onHover={interactive ? onPartnerHover : undefined}
         onSelect={interactive ? handleSelect : undefined}
         collapsed={morphing}
-        visibleCount={listVisible ?? undefined}
-        showHeaderLabel={headerLabel}
-        logo={
-          morphPartner && morphLogo
-            ? { src: morphPartner.stampLogo, alt: morphPartner.name }
-            : null
-        }
+        collapsedHeight={1}
+        transitionMs={ROUTE_MORPH_MS}
+        transitionEase={ROUTE_MORPH_EASE}
+        locked={morphing || !logosReady}
       />
     </div>
   );
@@ -544,19 +531,20 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
         className="pointer-events-none fixed inset-0 z-0 isolate overflow-hidden bg-cream"
         aria-hidden
       >
-        {plates.map((plate) => (
-          <div
-            key={plate.id}
-            className="absolute inset-0 overflow-hidden"
-            style={{ mixBlendMode: "darken" }}
-          >
-            <StampCanvas bitmap={plate.bitmap} />
-          </div>
-        ))}
-
         {stamps.map((stamp) => (
           <LogoStamp key={stamp.id} placement={stamp.placement} />
         ))}
+
+        {previewPartner?.images[0] ? (
+          <Image
+            src={previewPartner.images[0]}
+            alt=""
+            fill
+            sizes="100vw"
+            priority
+            className="object-cover"
+          />
+        ) : null}
       </div>
 
       <div
@@ -567,6 +555,7 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
         <aside
           ref={asideRef}
           className="flex w-full max-w-[375px] flex-col space-y-[-1px] px-5 py-5 max-[599px]:max-w-none"
+          onPointerLeave={handleContainerLeave}
         >
           <div
             ref={addressRef}
@@ -575,19 +564,26 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
           >
             <AddressBox
               showLogo={reveal >= ADDRESS_REVEAL}
-              opaque={ready || hasPlates}
-              collapsed={morphing}
+              opaque={ready || hasVisuals}
+              logo={
+                morphPartner
+                  ? {
+                      src: morphPartner.stampLogo,
+                      alt: morphPartner.name,
+                    }
+                  : undefined
+              }
             />
           </div>
 
           <div
-            className={morphing ? "order-3" : "order-2"}
+            className="order-2"
             style={{ visibility: modulesIn > 0 ? "visible" : "hidden" }}
           >
             {infoBox}
           </div>
           <div
-            className={morphing ? "order-2" : "order-3"}
+            className="order-3"
             style={{ visibility: modulesIn > 1 ? "visible" : "hidden" }}
           >
             {partnersList}
@@ -603,8 +599,8 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
                   ? undefined
                   : Math.max(0, reveal - (contactStart - 1))
               }
-              opaque={ready || hasPlates}
-              title={morphPartner ? "INQUIRE" : "CONTACT"}
+              opaque={ready || hasVisuals}
+              title="CONTACT"
               rows={
                 morphPartner
                   ? partnerContactRows(morphPartner.links)

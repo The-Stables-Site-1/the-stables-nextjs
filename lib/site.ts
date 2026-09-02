@@ -2,13 +2,16 @@ const information =
   "THE STABLES is a high-touch commercial team for distinctive beauty, fragrance, wellness, and lifestyle brands. From New York, we lead B2B sales, wholesale, and distribution as an extension of each brand.";
 
 export const site = {
-  name: "THE STABLES",
+  name: "The Stables",
+  url: "https://thestables.world",
+  description:
+    "The Stables is a New York commercial team leading B2B sales, wholesale, and distribution for distinctive beauty, fragrance, wellness, and lifestyle brands.",
   addressLines: [
     "WSA 161 WATER STREET #2205",
     "NEW YORK, NY 10038",
   ],
   phone: "917.399.5204",
-  website: "THESTABLES.COM",
+  website: "THESTABLES.WORLD",
   websiteUrl: "https://thestables.world",
   information,
   /** The one-liner the intro sets word by word; only the name is capitalised. */

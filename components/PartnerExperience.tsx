@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { AddressBox } from "@/components/AddressBox";
@@ -9,9 +9,10 @@ import { InfoBox } from "@/components/InfoBox";
 import { PartnersList } from "@/components/PartnersList";
 import { markAppBooted } from "@/lib/boot";
 import {
-  HEADER_OFF_MS,
-  ITEM_STAGGER_MS,
-  MORPH_MS,
+  LOGO_HOLD_MS,
+  partnersOpenHeight,
+  ROUTE_MORPH_EASE,
+  ROUTE_MORPH_MS,
 } from "@/lib/morph";
 import { partners as allPartners, type Partner } from "@/lib/partners";
 import {
@@ -32,12 +33,10 @@ export function PartnerExperience({ partner }: PartnerExperienceProps) {
   const images = partner.images;
   const [index, setIndex] = useState(0);
   const [leaving, setLeaving] = useState(false);
-  const [collapsed, setCollapsed] = useState(true);
-  const [listVisible, setListVisible] = useState(0);
-  const [headerLabel, setHeaderLabel] = useState(false);
-  const [showLogo, setShowLogo] = useState(true);
+  const [showPartnerLogo, setShowPartnerLogo] = useState(true);
   const [detailOpen, setDetailOpen] = useState(true);
   const leavingRef = useRef(false);
+  const panelHoveredRef = useRef(false);
   const morphTimersRef = useRef<number[]>([]);
 
   useEffect(() => {
@@ -55,19 +54,31 @@ export function PartnerExperience({ partner }: PartnerExperienceProps) {
     }
   }, [partner, router]);
 
-  useEffect(() => {
-    setIndex(0);
-  }, [partner]);
+  const setPanelOpen = useCallback((next: boolean) => {
+    if (
+      !next &&
+      !window.matchMedia("(hover: hover) and (pointer: fine)").matches
+    ) {
+      return;
+    }
+    setDetailOpen(next);
+  }, []);
 
   useEffect(() => {
     if (leaving || images.length < 2) return;
     const timer = window.setTimeout(() => {
+      if (
+        window.matchMedia("(hover: hover)").matches &&
+        !panelHoveredRef.current
+      ) {
+        setPanelOpen(false);
+      }
       setIndex((current) => (current + 1) % images.length);
     }, SLIDE_MS);
     return () => window.clearTimeout(timer);
-  }, [index, leaving, images.length, partner.slug]);
+  }, [index, leaving, images.length, partner.slug, setPanelOpen]);
 
-  const handleBack = () => {
+  const handleReturnHome = () => {
     if (leavingRef.current) return;
     leavingRef.current = true;
     setLeaving(true);
@@ -80,23 +91,14 @@ export function PartnerExperience({ partner }: PartnerExperienceProps) {
       return;
     }
 
-    setShowLogo(false);
-    setHeaderLabel(true);
-    setCollapsed(false);
+    setShowPartnerLogo(false);
+    setDetailOpen(true);
 
-    const after = (ms: number, run: () => void) => {
-      morphTimersRef.current.push(window.setTimeout(run, ms));
-    };
-
-    const total = allPartners.length;
-    for (let i = 0; i < total; i += 1) {
-      after(ITEM_STAGGER_MS * (i + 1), () => setListVisible(i + 1));
-    }
-
-    const doneAt = Math.max(ITEM_STAGGER_MS * total + HEADER_OFF_MS, MORPH_MS);
-    after(doneAt, () => {
-      if (leavingRef.current) router.push("/");
-    });
+    morphTimersRef.current.push(
+      window.setTimeout(() => {
+        if (leavingRef.current) router.push("/");
+      }, ROUTE_MORPH_MS + LOGO_HOLD_MS),
+    );
   };
 
   useEffect(
@@ -116,7 +118,11 @@ export function PartnerExperience({ partner }: PartnerExperienceProps) {
         aria-label="Next image"
         onClick={() => {
           if (leaving) return;
-          setDetailOpen(false);
+          if (
+            window.matchMedia("(hover: hover) and (pointer: fine)").matches
+          ) {
+            setPanelOpen(false);
+          }
           if (images.length < 2) return;
           setIndex((current) => (current + 1) % images.length);
         }}
@@ -128,7 +134,7 @@ export function PartnerExperience({ partner }: PartnerExperienceProps) {
             <Image
               key={src}
               src={src}
-              alt=""
+              alt={`${partner.name} brand image ${i + 1}`}
               fill
               sizes="100vw"
               priority
@@ -143,18 +149,31 @@ export function PartnerExperience({ partner }: PartnerExperienceProps) {
 
       <div className="pointer-events-none absolute inset-0 z-20">
         <aside className="pointer-events-none absolute inset-x-0 top-0 mx-auto flex h-full max-h-full w-full max-w-[375px] flex-col justify-center px-5 py-5 max-[599px]:max-w-none">
-          <div className="pointer-events-auto flex min-h-0 w-full max-h-full flex-col overflow-y-auto overscroll-none">
+          <div
+            className="pointer-events-auto flex min-h-0 w-full max-h-full flex-col overflow-y-auto overscroll-none"
+            onPointerEnter={() => {
+              panelHoveredRef.current = true;
+              setPanelOpen(true);
+            }}
+            onPointerLeave={() => {
+              panelHoveredRef.current = false;
+            }}
+          >
             <div className="order-1 shrink-0">
               <AddressBox
-                collapsed={collapsed}
+                logo={
+                  showPartnerLogo
+                    ? { src: partner.stampLogo, alt: partner.name }
+                    : undefined
+                }
                 href="/"
-                onBack={handleBack}
+                onBack={handleReturnHome}
               />
             </div>
 
             <div
-              className={`relative z-[1] shrink-0 -mt-px ${
-                homeContent ? "order-2" : "order-3"
+              className={`relative z-[1] order-2 shrink-0 ${
+                detailOpen ? "-mt-px" : ""
               }`}
             >
               <InfoBox
@@ -163,44 +182,42 @@ export function PartnerExperience({ partner }: PartnerExperienceProps) {
                 }
                 moreHref={homeContent ? "/about" : undefined}
                 open={detailOpen}
-                onOpenChange={setDetailOpen}
+                onOpenChange={setPanelOpen}
+                collapsedHeight={0}
+                transitionMs={ROUTE_MORPH_MS}
+                transitionEase={ROUTE_MORPH_EASE}
               />
             </div>
+
+            {leaving ? (
+              <div
+                className="relative z-[1] order-3 shrink-0 -mt-px overflow-hidden"
+                style={{
+                  height: partnersOpenHeight(allPartners.length),
+                  animation: `partners-expand ${ROUTE_MORPH_MS}ms ${ROUTE_MORPH_EASE} both`,
+                }}
+              >
+                <PartnersList partners={allPartners} locked />
+              </div>
+            ) : null}
 
             <div
-              className={`relative z-[1] shrink-0 -mt-px ${
-                homeContent ? "order-3" : "order-2"
-              }`}
+              className={`relative z-[1] shrink-0 ${
+                leaving ? "order-4" : "order-3"
+              } ${detailOpen ? "-mt-px" : ""}`}
             >
-              <PartnersList
-                partners={allPartners}
-                collapsed={collapsed}
-                visibleCount={listVisible}
-                showHeaderLabel={headerLabel}
-                locked
-                logo={
-                  showLogo
-                    ? { src: partner.stampLogo, alt: partner.name }
-                    : null
-                }
-                onLogoClick={
-                  showLogo && !leaving
-                    ? () => setDetailOpen(true)
-                    : undefined
-                }
-              />
-            </div>
-
-            <div className="relative z-[1] order-4 shrink-0 -mt-px">
               <ContactLinks
-                title={homeContent ? "CONTACT" : "INQUIRE"}
+                title="CONTACT"
                 rows={
                   homeContent
                     ? undefined
                     : partnerContactRows(partner.links)
                 }
                 open={detailOpen}
-                onOpenChange={setDetailOpen}
+                onOpenChange={setPanelOpen}
+                collapsedHeight={0}
+                transitionMs={ROUTE_MORPH_MS}
+                transitionEase={ROUTE_MORPH_EASE}
               />
             </div>
           </div>

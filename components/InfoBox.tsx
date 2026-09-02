@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { BOX_BORDER, MORPH_EASE, MORPH_MS, PARTNER_ROW_H, STAMP_BOX_H } from "@/lib/morph";
+import { BOX_BORDER, INFO_BOX_H, MORPH_EASE, MORPH_MS, PARTNER_ROW_H } from "@/lib/morph";
 
 type InfoBoxProps = {
   title?: string;
@@ -18,6 +18,9 @@ type InfoBoxProps = {
   indent?: boolean;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  collapsedHeight?: number;
+  transitionMs?: number;
+  transitionEase?: string;
 };
 
 export function InfoBox({
@@ -32,6 +35,9 @@ export function InfoBox({
   indent = false,
   open,
   onOpenChange,
+  collapsedHeight = PARTNER_ROW_H + BOX_BORDER,
+  transitionMs = MORPH_MS,
+  transitionEase = MORPH_EASE,
 }: InfoBoxProps) {
   const [uncontrolled, setUncontrolled] = useState(true);
   const isOpen = open ?? uncontrolled;
@@ -49,9 +55,10 @@ export function InfoBox({
         height: isOpen
           ? fit
             ? "auto"
-            : STAMP_BOX_H
-          : PARTNER_ROW_H + BOX_BORDER,
-        transition: `height ${MORPH_MS}ms ${MORPH_EASE}`,
+            : INFO_BOX_H
+          : collapsedHeight,
+        borderWidth: !isOpen && collapsedHeight === 0 ? 0 : undefined,
+        transition: `height ${transitionMs}ms ${transitionEase}`,
       }}
     >
       <button

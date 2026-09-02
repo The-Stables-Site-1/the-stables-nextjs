@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { StampBox } from "@/components/StampBox";
 import {
   BOX_BORDER,
   MORPH_EASE,
@@ -23,12 +22,11 @@ type PartnersListProps = {
   onSelect?: (slug: string) => void;
   /** Slides down to a 138px module that holds the partner stamp. */
   collapsed?: boolean;
-  /** Rows still on the page while they peel away one by one. */
-  visibleCount?: number;
-  showHeaderLabel?: boolean;
-  logo?: { src: string; alt: string } | null;
+  /** Override the collapsed geometry for a route-to-route handoff. */
+  collapsedHeight?: number;
+  transitionMs?: number;
+  transitionEase?: string;
   locked?: boolean;
-  onLogoClick?: () => void;
 };
 
 export function PartnersList({
@@ -40,11 +38,10 @@ export function PartnersList({
   onHover,
   onSelect,
   collapsed = false,
-  visibleCount,
-  showHeaderLabel = true,
-  logo = null,
+  collapsedHeight = STAMP_BOX_H,
+  transitionMs = MORPH_MS,
+  transitionEase = MORPH_EASE,
   locked = false,
-  onLogoClick,
 }: PartnersListProps) {
   const [open, setOpen] = useState(true);
   const boxRef = useRef<HTMLDivElement>(null);
@@ -65,26 +62,22 @@ export function PartnersList({
       if (slug) onHoverRef.current?.(slug);
     };
 
-    const handleLeave = (event: Event) => {
+    const handleFocusLeave = (event: Event) => {
       const related = (event as MouseEvent).relatedTarget as Node | null;
       if (related && list.contains(related)) return;
       onHoverRef.current?.(null);
     };
 
     list.addEventListener("pointerover", handleEnter);
-    list.addEventListener("pointerleave", handleLeave);
     list.addEventListener("focusin", handleEnter);
-    list.addEventListener("focusout", handleLeave);
+    list.addEventListener("focusout", handleFocusLeave);
 
     return () => {
       list.removeEventListener("pointerover", handleEnter);
-      list.removeEventListener("pointerleave", handleLeave);
       list.removeEventListener("focusin", handleEnter);
-      list.removeEventListener("focusout", handleLeave);
+      list.removeEventListener("focusout", handleFocusLeave);
     };
   }, []);
-
-  const shown = visibleCount ?? partners.length;
 
   return (
     <div
@@ -94,29 +87,26 @@ export function PartnersList({
       } ${collapsed || locked ? "pointer-events-none" : ""}`}
       style={{
         height: collapsed
-          ? STAMP_BOX_H
+          ? collapsedHeight
           : open
             ? partnersOpenHeight(partners.length)
             : PARTNER_ROW_H + BOX_BORDER,
-        transition: `height ${MORPH_MS}ms ${MORPH_EASE}`,
+        transition: `height ${transitionMs}ms ${transitionEase}`,
       }}
     >
       <button
         type="button"
         aria-expanded={open}
         onClick={() => {
-          setOpen((current) => {
-            if (current) onHoverRef.current?.(null);
-            return !current;
-          });
+          setOpen((current) => !current);
         }}
         className={`flex h-[32px] w-full shrink-0 cursor-pointer items-center justify-center ${
-          open && showHeaderLabel ? "border-b-[0.75px] border-ink" : ""
+          open ? "border-b-[0.75px] border-ink" : ""
         }`}
       >
         <span
           className={`text-[11px] uppercase tracking-[0.02em] ${
-            showTitle && showHeaderLabel ? "opacity-100" : "opacity-0"
+            showTitle ? "opacity-100" : "opacity-0"
           }`}
         >
           Partners
@@ -124,7 +114,6 @@ export function PartnersList({
       </button>
       <ul ref={listRef} className={`flex flex-col ${open ? "" : "hidden"}`}>
         {partners.map((partner, index) => {
-          if (index >= shown) return null;
           const isActive = activeSlug === partner.slug;
           return (
             <li key={partner.slug}>
@@ -132,7 +121,9 @@ export function PartnersList({
                 href={`/partners/${partner.slug}`}
                 data-partner-slug={partner.slug}
                 className={`relative flex h-[32px] items-center px-3 text-[11px] text-black ${
-                  index < shown - 1 ? "border-b-[0.75px] border-ink" : ""
+                  index < partners.length - 1
+                    ? "border-b-[0.75px] border-ink"
+                    : ""
                 } ${index < revealedCount ? "" : "pointer-events-none"}`}
                 onClick={(event) => {
                   if (!onSelect) return;
@@ -170,19 +161,6 @@ export function PartnersList({
           );
         })}
       </ul>
-      {logo && onLogoClick ? (
-        <button
-          type="button"
-          aria-label={logo.alt}
-          onClick={onLogoClick}
-          className="absolute inset-0 cursor-pointer mix-blend-multiply"
-          style={{ pointerEvents: "auto" }}
-        >
-          <StampBox src={logo.src} alt="" blend={false} seed={logo.alt} />
-        </button>
-      ) : logo ? (
-        <StampBox src={logo.src} alt={logo.alt} seed={logo.alt} />
-      ) : null}
     </div>
   );
 }

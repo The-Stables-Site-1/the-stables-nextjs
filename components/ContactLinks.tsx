@@ -18,6 +18,9 @@ type ContactLinksProps = {
   rows?: readonly ContactRow[];
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  collapsedHeight?: number;
+  transitionMs?: number;
+  transitionEase?: string;
 };
 
 const defaultRows: readonly ContactRow[] = [
@@ -33,9 +36,9 @@ export function partnerContactRows(links: {
   website: string;
 }): readonly ContactRow[] {
   return [
-    { label: "WHOLESALE", href: links.wholesale },
-    { label: "INSTAGRAM", href: links.instagram, external: true },
     { label: "WEBSITE", href: links.website, external: true },
+    { label: "INSTAGRAM", href: links.instagram, external: true },
+    { label: "WHOLESALE", href: links.wholesale },
   ];
 }
 
@@ -46,6 +49,9 @@ export function ContactLinks({
   rows = defaultRows,
   open,
   onOpenChange,
+  collapsedHeight = ROW_H,
+  transitionMs = MORPH_MS,
+  transitionEase = MORPH_EASE,
 }: ContactLinksProps) {
   const [uncontrolled, setUncontrolled] = useState(true);
   const isOpen = open ?? uncontrolled;
@@ -65,8 +71,8 @@ export function ContactLinks({
       style={{
         height: isOpen
           ? ROW_H * (1 + rows.length) - rows.length
-          : ROW_H,
-        transition: `height ${MORPH_MS}ms ${MORPH_EASE}`,
+          : collapsedHeight,
+        transition: `height ${transitionMs}ms ${transitionEase}`,
       }}
     >
       <button
