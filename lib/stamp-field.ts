@@ -4,15 +4,32 @@ import { STAMP_WEAR, stampBoxSize, type StampInk } from "@/lib/silkscreen-gl";
 export { STAMP_WEAR };
 
 /** Mail-art pad colours: office rubber-stamp inks, muted for cream stock. */
-export const STAMP_INKS: StampInk[] = [
-  [0.11, 0.11, 0.1], // ink black
-  [0.78, 0.19, 0.14], // vermilion
-  [0.1, 0.51, 0.46], // teal
-  [0.16, 0.24, 0.55], // ultramarine
-  [0.4, 0.27, 0.55], // violet
-  [0.16, 0.31, 0.22], // forest
-  [0.71, 0.5, 0.16], // ochre
-];
+const STAMP_INK_HEXES = [
+  "#2B2A28",
+  "#1F3A5F",
+  "#2B4C9B",
+  "#B3261E",
+  "#7A1F2B",
+  "#A8461C",
+  "#5C3A21",
+  "#1E5A3A",
+  "#3F5A2A",
+  "#4B2C6B",
+  "#6E2A4F",
+  "#1B5563",
+  "#3E4A5C",
+] as const;
+
+function hexToStampInk(hex: string): StampInk {
+  const value = Number.parseInt(hex.slice(1), 16);
+  return [
+    ((value >> 16) & 0xff) / 255,
+    ((value >> 8) & 0xff) / 255,
+    (value & 0xff) / 255,
+  ];
+}
+
+export const STAMP_INKS: StampInk[] = STAMP_INK_HEXES.map(hexToStampInk);
 
 /** Ink squeeze-out needs a little room outside the art box. */
 export const STAMP_PAD = 10;

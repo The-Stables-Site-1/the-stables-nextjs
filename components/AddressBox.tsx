@@ -4,28 +4,25 @@ import Image from "next/image";
 import Link from "next/link";
 import { useLayoutEffect, useRef } from "react";
 import { StampBox } from "@/components/StampBox";
+import {
+  cardLogoTransform,
+  CENTERED_CARD_LOGO_PLACEMENT,
+  randomHomeLogoPlacement,
+  type CardLogoPlacement,
+} from "@/lib/card-logo-placement";
 import { STAMP_BOX_ASPECT_RATIO, STAMP_BOX_H } from "@/lib/morph";
 import type { PartnerLogoHandoff } from "@/lib/partner-transition";
 import { brandStampLogo } from "@/lib/partners";
 
-const HOME_LOGO_POSITION_KEY = "the-stables:home-logo-position:business-card";
-
-type LogoPosition = {
-  left: number;
-  top: number;
-  scale?: number;
+const HOME_STAMP_SCALE = 1.5 * 0.85;
+// Dark-pixel bounds of brand/stamp-logo.png (measured from the 640×480 asset).
+// The opaque white margin multiplies away, so placement must bound the ink.
+const HOME_STAMP_INK = {
+  centerX: (82 + 482 / 2) / 640,
+  centerY: (131 + 198 / 2) / 480,
+  width: 482 / 640,
+  height: 198 / 480,
 };
-
-function readPosition(key: string) {
-  const saved = window.sessionStorage.getItem(key);
-  if (!saved) return null;
-  try {
-    return JSON.parse(saved) as LogoPosition;
-  } catch {
-    window.sessionStorage.removeItem(key);
-    return null;
-  }
-}
 
 type AddressBoxProps = {
   showLogo?: boolean;
@@ -35,6 +32,7 @@ type AddressBoxProps = {
   href?: string;
   onBack?: () => void;
   logoHandoff?: PartnerLogoHandoff | null;
+  homeLogoPlacement?: CardLogoPlacement | null;
 };
 
 export function AddressBox({
@@ -44,35 +42,68 @@ export function AddressBox({
   href,
   onBack,
   logoHandoff = null,
+  homeLogoPlacement = null,
 }: AddressBoxProps) {
+  const logoFrameRef = useRef<HTMLDivElement>(null);
   const logoRef = useRef<HTMLDivElement>(null);
+  const logoImageRef = useRef<HTMLImageElement>(null);
   const partnerLogoRef = useRef<HTMLDivElement>(null);
-  const lastLogoRef = useRef(logo);
-  if (logo) lastLogoRef.current = logo;
-
-  const displayedLogo = lastLogoRef.current;
+  const displayedLogo =
+    logo ??
+    (logoHandoff
+      ? { src: logoHandoff.src, alt: logoHandoff.alt }
+      : undefined);
   const partnerLogoSrc = logo?.src;
 
   useLayoutEffect(() => {
+    const frame = logoFrameRef.current;
     const stablesLogo = logoRef.current;
-    if (!stablesLogo) return;
+    const image = logoImageRef.current;
+    if (!frame || !stablesLogo || !image) return;
     stablesLogo.style.opacity = "0";
     if (!showLogo || partnerLogoSrc) return;
 
-    let position = readPosition(HOME_LOGO_POSITION_KEY);
-    position ??= {
-      left: Math.round(Math.random() * 50),
-      top: Math.round(-24 + Math.random() * 18),
+    const placement = homeLogoPlacement ?? randomHomeLogoPlacement();
+    const position = () => {
+      if (!image.naturalWidth || !image.naturalHeight) return;
+      const frameW = frame.clientWidth;
+      const frameH = frame.clientHeight;
+      const fit = Math.min(
+        frameW / image.naturalWidth,
+        frameH / image.naturalHeight,
+      );
+      // Unlike partner canvases, size this element to the home artwork's
+      // actual ink bounds; its large opaque white margin multiplies away.
+      const imageW = image.naturalWidth * fit * HOME_STAMP_SCALE;
+      const imageH = image.naturalHeight * fit * HOME_STAMP_SCALE;
+      const inkW = imageW * HOME_STAMP_INK.width;
+      const inkH = imageH * HOME_STAMP_INK.height;
+      stablesLogo.style.width = `${imageW}px`;
+      stablesLogo.style.height = `${imageH}px`;
+      stablesLogo.style.left =
+        `${frameW / 2 - imageW * HOME_STAMP_INK.centerX}px`;
+      stablesLogo.style.top =
+        `${frameH / 2 - imageH * HOME_STAMP_INK.centerY}px`;
+      stablesLogo.style.transformOrigin =
+        `${HOME_STAMP_INK.centerX * 100}% ${HOME_STAMP_INK.centerY * 100}%`;
+      stablesLogo.style.transform = cardLogoTransform(
+        placement,
+        frameW,
+        frameH,
+        inkW,
+        inkH,
+      );
+      stablesLogo.style.opacity = "1";
     };
-
-    stablesLogo.style.left = `${position.left}px`;
-    stablesLogo.style.top = `${position.top}px`;
-    window.sessionStorage.setItem(
-      HOME_LOGO_POSITION_KEY,
-      JSON.stringify(position),
-    );
-    stablesLogo.style.opacity = "1";
-  }, [partnerLogoSrc, showLogo]);
+    position();
+    const observer = new ResizeObserver(position);
+    observer.observe(frame);
+    image.addEventListener("load", position);
+    return () => {
+      observer.disconnect();
+      image.removeEventListener("load", position);
+    };
+  }, [homeLogoPlacement, partnerLogoSrc, showLogo]);
 
   useLayoutEffect(() => {
     const partnerLogo = partnerLogoRef.current;
@@ -86,7 +117,6 @@ export function AddressBox({
       return;
     }
 
-    partnerLogo.style.transform = logoHandoff.transform;
     partnerLogo.style.opacity = "1";
   }, [logoHandoff, partnerLogoSrc, showLogo]);
 
@@ -101,14 +131,16 @@ export function AddressBox({
   const body = (
     <>
       <div
-        ref={logoRef}
-        className="pointer-events-none absolute top-[-18px] left-[15px] h-[218px] w-[285px] mix-blend-multiply"
-        style={{
-          opacity: 0,
-        }}
+        ref={logoFrameRef}
+        className="pointer-events-none absolute inset-4 mix-blend-multiply"
       >
-        <div className="relative h-full w-full -rotate-[1.6deg]">
+        <div
+          ref={logoRef}
+          className="absolute"
+          style={{ opacity: 0 }}
+        >
           <Image
+            ref={logoImageRef}
             src={brandStampLogo}
             alt="The Stables"
             fill
@@ -125,13 +157,14 @@ export function AddressBox({
           aria-hidden={logo ? undefined : true}
           style={{
             opacity: 0,
-            transformOrigin: "center",
           }}
         >
           <StampBox
             src={displayedLogo.src}
             alt={displayedLogo.alt}
-            seed={displayedLogo.alt}
+            placement={
+              logoHandoff?.placement ?? CENTERED_CARD_LOGO_PLACEMENT
+            }
             source={
               logoHandoff?.src === displayedLogo.src
                 ? logoHandoff.source

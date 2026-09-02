@@ -1,3 +1,8 @@
+import {
+  isCardLogoPlacement,
+  randomCardLogoPlacement,
+  type CardLogoPlacement,
+} from "@/lib/card-logo-placement";
 import { STAMP_ART_H, STAMP_ART_W } from "@/lib/morph";
 import { getSilkscreenPrinter } from "@/lib/silkscreen-gl";
 
@@ -6,23 +11,16 @@ const DPR_CAP = 1.25;
 export type PartnerLogoHandoff = {
   src: string;
   alt: string;
-  transform: string;
+  placement: CardLogoPlacement;
   source: HTMLCanvasElement | null;
 };
 
 let activeHandoff: PartnerLogoHandoff | null = null;
 let pendingBitmap: Promise<PartnerLogoHandoff> | null = null;
 
-function randomTransform() {
-  const left = Math.round(-8 + Math.random() * 16);
-  const top = Math.round(-6 + Math.random() * 12);
-  const scale = 1.12 + Math.random() * 0.12;
-  return `translate(${left}px, ${top}px) scale(${scale})`;
-}
-
 /**
  * Starts one logo presentation for the whole home → partner → home visit.
- * The same transform and rendered bitmap survive the App Router remount.
+ * The same placement and rendered bitmap survive the App Router remount.
  */
 export async function beginPartnerLogoHandoff(
   src: string,
@@ -31,7 +29,7 @@ export async function beginPartnerLogoHandoff(
   const handoff: PartnerLogoHandoff = {
     src,
     alt,
-    transform: randomTransform(),
+    placement: randomCardLogoPlacement(),
     source: null,
   };
   activeHandoff = handoff;
@@ -53,7 +51,12 @@ export async function beginPartnerLogoHandoff(
 }
 
 export function getPartnerLogoHandoff(src: string) {
-  return activeHandoff?.src === src ? activeHandoff : null;
+  if (activeHandoff?.src !== src) return null;
+  // Turbopack can preserve module state whose shape predates this field.
+  if (!isCardLogoPlacement(activeHandoff.placement)) {
+    activeHandoff.placement = randomCardLogoPlacement();
+  }
+  return activeHandoff;
 }
 
 /** Creates a presentation for a direct partner-page visit. */

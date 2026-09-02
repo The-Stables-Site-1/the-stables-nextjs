@@ -4,36 +4,21 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   getSilkscreenPrinter,
 } from "@/lib/silkscreen-gl";
+import {
+  cardLogoTransform,
+  CENTERED_CARD_LOGO_PLACEMENT,
+  type CardLogoPlacement,
+} from "@/lib/card-logo-placement";
 import { STAMP_ART_H, STAMP_ART_W } from "@/lib/morph";
 
 const DPR_CAP = 1.25;
 
-function stampAngle(seed: string) {
-  let hash = 2166136261;
-  for (let i = 0; i < seed.length; i += 1) {
-    hash ^= seed.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  const unit = (hash >>> 0) / 4294967296;
-  const mag = 5 + unit * 11;
-  return (hash & 1) === 0 ? mag : -mag;
-}
-
-function fitScale(deg: number, boxW: number, boxH: number) {
-  const rad = (deg * Math.PI) / 180;
-  const sin = Math.abs(Math.sin(rad));
-  const cos = Math.abs(Math.cos(rad));
-  const rotW = boxW * cos + boxH * sin;
-  const rotH = boxW * sin + boxH * cos;
-  return Math.min(boxW / Math.max(rotW, 1), boxH / Math.max(rotH, 1));
-}
-
 type StampBoxProps = {
   src: string;
   alt: string;
+  placement?: CardLogoPlacement;
   visible?: boolean;
   blend?: boolean;
-  seed?: string;
   source?: HTMLCanvasElement | null;
 };
 
@@ -41,9 +26,9 @@ type StampBoxProps = {
 export function StampBox({
   src,
   alt,
+  placement = CENTERED_CARD_LOGO_PLACEMENT,
   visible = true,
   blend = true,
-  seed,
   source = null,
 }: StampBoxProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -55,8 +40,10 @@ export function StampBox({
     w: STAMP_ART_W,
     h: STAMP_ART_H,
   });
-  const angle = useMemo(() => stampAngle(seed || src), [seed, src]);
-  const scale = fitScale(angle, box.w, box.h);
+  const transform = useMemo(
+    () => cardLogoTransform(placement, box.w, box.h),
+    [placement, box],
+  );
 
   useLayoutEffect(() => {
     const wrap = wrapRef.current;
@@ -151,7 +138,7 @@ export function StampBox({
     >
       <div
         className="flex h-full w-full items-center justify-center"
-        style={{ transform: `rotate(${angle}deg) scale(${scale})` }}
+        style={{ transform }}
       >
         {fallback ? (
           <img

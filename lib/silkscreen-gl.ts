@@ -297,28 +297,52 @@ const STAMP_FRAG = /* glsl */ `
 
     vec2 uvIso = (uvL - 0.5) * vec2(1.0, uArt.y / max(uArt.x, 1.0)) + 0.5;
     uvIso += uSeed * 5.3;
-    float erode = 0.006 * uArt.x * mix(0.6, 1.6, uWear);
+    // Edges wobble by a hair; the letterforms themselves stay whole.
+    float erode = 0.002 * uArt.x * mix(0.5, 1.5, uWear);
     dPx += (fbm(uvIso * 25.0) - 0.5) * erode;
     dPx -= ease * mix(0.3, 1.4, uPressure);
 
     float cov = clamp(0.5 - dPx, 0.0, 1.0);
 
-    float fine = fbm(uvIso * 60.0);
-    float mid = fbm(uvIso * 12.0 + 17.0);
-    float n = fine * 0.55 + mid * 0.45;
-    float np = fbm((px + uPaper) * 0.06 + 31.0);
-    n = mix(n, np, 0.25);
+    // Paper tooth (fine) and ink-film thickness (mid), the latter shared
+    // with the sheet so neighbouring stamps dry the same way.
+    float fine = fbm(uvIso * 70.0);
+    float mid = fbm(uvIso * 10.0 + 17.0);
+    float np = fbm((px + uPaper) * 0.05 + 31.0);
+    mid = mix(mid, np, 0.3);
 
-    float t = mix(0.38, 0.58, uWear);
-    t += dot(uPressDir, uvL - 0.5) * 0.24;
-    t += (vnoise(uvL * 1.5 + uSeed * 9.0) - 0.5) * 0.14;
-    t -= (uPressure - 0.5) * 0.1;
-    t += (1.0 - ease) * 0.3;
-    t += (1.0 - smoothstep(0.0, 1.5, max(-dPx, 0.0))) * 0.08;
+    float bias = mix(-0.08, 0.16, uWear);
+    bias += dot(uPressDir, uvL - 0.5) * 0.22;
+    bias += (vnoise(uvL * 1.5 + uSeed * 9.0) - 0.5) * 0.12;
+    bias -= (uPressure - 0.5) * 0.12;
+    bias += (1.0 - ease) * 0.4;
+    bias += (1.0 - smoothstep(0.0, 1.5, max(-dPx, 0.0))) * 0.05;
 
-    float ink = cov * step(t, n);
+    // How much ink the die carried here: the film thins where it was dry.
+    float rich = smoothstep(0.18 + bias, 0.6 + bias, mid);
+    float film = mix(0.45, 1.0, rich);
+    film *= mix(0.8, 1.0, smoothstep(0.3 + bias, 0.5 + bias, fine));
+
+    // Pinholes where the paper tooth never met the die. A thin film breaks
+    // into speckle rather than fading, so the threshold rises with dryness.
+    float hole = step(0.26 + bias + (1.0 - rich) * 0.1, fine);
+
+    // Coverage stays hard; the ink is either on the paper or it isn't.
+    float ink = cov * hole;
+
+    // A fuzzy halo of stray dots just outside the contour, like ink that
+    // crept into the paper fibres.
+    float fringe = clamp(1.0 - dPx / 1.8, 0.0, 1.0) * (1.0 - cov);
+    fringe *= step(0.52 + bias, fine);
+    ink = max(ink, fringe);
+    film *= mix(0.6, 1.0, cov);
+
+    // Pigment obeys Beer-Lambert under the multiply blend: a thinner film
+    // lifts the tone but keeps its saturation, instead of washing toward
+    // white the way a lowered alpha would.
     float field = vnoise(uvL * 1.4 + uSeed * 4.0);
-    vec3 colour = uInk * mix(1.04, 0.96, field);
+    vec3 pigment = clamp(uInk * mix(1.04, 0.96, field), 0.002, 1.0);
+    vec3 colour = pow(pigment, vec3(mix(0.35, 1.15, film)));
     gl_FragColor = vec4(colour * ink, ink);
   }
 `;
@@ -979,11 +1003,11 @@ export type LogoStampOptions = {
   ink: StampInk;
 };
 
-/** Default card-stamp ink, matching the idle-field black. */
+/** Address-card partner stamps intentionally stay black, independent of the field palette. */
 export const STAMP_INK_BLACK: StampInk = [0.11, 0.11, 0.1];
 
 /** User-facing wear: 0 fresh pad, 1 dry / eaten. Field and card stamps orbit this. */
-export const STAMP_WEAR = 0.48;
+export const STAMP_WEAR = 0.24;
 
 const CARD_STAMP_PAD = 8;
 

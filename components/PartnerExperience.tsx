@@ -15,6 +15,10 @@ import { InfoBox } from "@/components/InfoBox";
 import { PartnersList } from "@/components/PartnersList";
 import { markAppBooted } from "@/lib/boot";
 import {
+  beginHomeLogoHandoff,
+  type CardLogoPlacement,
+} from "@/lib/card-logo-placement";
+import {
   LOGO_HOLD_MS,
   partnersOpenHeight,
   ROUTE_MORPH_EASE,
@@ -53,6 +57,8 @@ export function PartnerExperience({ partner }: PartnerExperienceProps) {
   const [showPartnerLogo, setShowPartnerLogo] = useState(true);
   const [detailOpen, setDetailOpen] = useState(true);
   const [settlingHome, setSettlingHome] = useState(false);
+  const [homeLogoPlacement, setHomeLogoPlacement] =
+    useState<CardLogoPlacement | null>(null);
   const [logoHandoff, setLogoHandoff] =
     useState<PartnerLogoHandoff | null>(() =>
       typeof window === "undefined"
@@ -188,6 +194,7 @@ export function PartnerExperience({ partner }: PartnerExperienceProps) {
   const handleReturnHome = () => {
     if (leavingRef.current) return;
     leavingRef.current = true;
+    setHomeLogoPlacement(beginHomeLogoHandoff());
     setLeaving(true);
 
     const reduceMotion = window.matchMedia(
@@ -291,6 +298,7 @@ export function PartnerExperience({ partner }: PartnerExperienceProps) {
                     : undefined
                 }
                 logoHandoff={logoHandoff}
+                homeLogoPlacement={homeLogoPlacement}
                 href="/"
                 onBack={handleReturnHome}
               />

@@ -18,8 +18,6 @@ const DEFAULT_PAD = 24;
 const DEFAULT_RANGE = 10;
 const INF = 1e4;
 const BINARIZE = 0.5;
-/** If this share of inner pixels is fully opaque, treat the image as luma. */
-const OPAQUE_FALLBACK = 0.96;
 
 export function buildLogoSdf(
   img: HTMLImageElement,
@@ -53,15 +51,6 @@ export function buildLogoSdf(
     return null;
   }
 
-  const innerCount = artW * artH;
-  let opaque = 0;
-  for (let y = pad; y < pad + artH; y += 1) {
-    for (let x = pad; x < pad + artW; x += 1) {
-      if (pixels[(y * w + x) * 4 + 3] > 250) opaque += 1;
-    }
-  }
-  const useLuma = innerCount > 0 && opaque / innerCount >= OPAQUE_FALLBACK;
-
   const n = w * h;
   const insideX = new Float32Array(n);
   const insideY = new Float32Array(n);
@@ -74,7 +63,10 @@ export function buildLogoSdf(
     const b = pixels[i * 4 + 2] / 255;
     const a = pixels[i * 4 + 3] / 255;
     const luma = r * 0.299 + g * 0.587 + b * 0.114;
-    const coverage = useLuma ? (1 - luma) * a : a;
+    // A die only carries the dark artwork: white fills and pale colours inside
+    // an opaque silhouette are paper, not ink.
+    const darkness = Math.min(1, Math.max(0, (0.9 - luma) * 2.4));
+    const coverage = darkness * a;
     const ink = coverage >= BINARIZE;
     if (ink) {
       insideX[i] = 0;

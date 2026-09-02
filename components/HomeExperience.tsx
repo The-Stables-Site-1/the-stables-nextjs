@@ -11,6 +11,7 @@ import { Loader } from "@/components/Loader";
 import { LogoStamp } from "@/components/LogoStamp";
 import { PartnersList } from "@/components/PartnersList";
 import { hasAppBooted, markAppBooted } from "@/lib/boot";
+import { takeHomeLogoHandoff } from "@/lib/card-logo-placement";
 import {
   LOGO_HOLD_MS,
   ROUTE_MORPH_EASE,
@@ -96,6 +97,9 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
   const [morphPartner, setMorphPartner] = useState<Partner | null>(null);
   const [logoHandoff, setLogoHandoff] =
     useState<PartnerLogoHandoff | null>(null);
+  const [homeLogoPlacement] = useState(() =>
+    typeof window === "undefined" ? null : takeHomeLogoHandoff(),
+  );
   const [previewSlug, setPreviewSlug] = useState<string | null>(null);
   const [stamps, setStamps] = useState<StampInstance[]>([]);
   const morphTimersRef = useRef<number[]>([]);
@@ -630,6 +634,7 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
                   : undefined
               }
               logoHandoff={logoHandoff}
+              homeLogoPlacement={homeLogoPlacement}
             />
           </div>
 
