@@ -95,7 +95,7 @@ export const partners: Partner[] = [
     slug: "the-grey",
     name: "The Grey",
     description:
-      "The Grey is a men's skincare brand built for the modern, active man, developed alongside leading European laboratories and formulated around what men's skin actually needs. The line pairs targeted topical care with an inside-out philosophy, anchored by a daily vitamin and mineral system designed to support skin and counter the wear of a stressful, active life from within. It's a compact, well-designed regimen built on the idea that real skincare works on both fronts — what you put on, and what you take in.",
+      "THE GREY is a distinctive lifestyle and wellness brand built around quiet luxury and intentional living.",
     stampLogo: "/partners/the-grey/logo.png",
     images: [
       "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/the-grey/hero.jpeg",
@@ -112,7 +112,7 @@ export const partners: Partner[] = [
     slug: "tsu-lange-yor",
     name: "Tsu Lange Yor",
     description:
-      "Tsu Lange Yor is an independent fragrance and lifestyle brand founded by brothers Troye Sivan and Steele Mellet in Carlton, Australia. Its name comes from a Yiddish phrase meaning 'to long years and to good years,' and its scents for home and body are built around identity, sanctuary, and heritage. Each fragrance is developed with a rotating cast of perfumers and visual artists, giving the collection a distinct personality per scent rather than a single house signature.",
+      "TSU LANGE YOR is a distinctive fragrance and lifestyle brand with a singular aesthetic voice.",
     stampLogo: "/partners/tsu-lange-yor/logo.png",
     images: [
       "/partners/tsu-lange-yor/hero.jpeg",
@@ -134,7 +134,7 @@ export const partners: Partner[] = [
     slug: "vacation",
     name: "Vacation",
     description:
-      "Vacation makes sunscreen and body care built around a single idea: summer should smell like summer. Its signature scent — coconut, banana, pineapple, and orange blossom laid over pool water, pool toy, and swimsuit fabric — was developed with perfumer Carlos Huber of Arquiste and Rodrigo Flores-Roux of Givaudan to bottle the exact nostalgia of an '80s poolside afternoon. Marketed as the world's best-smelling sunscreen, Vacation treats sun care as a scent-first, high-performance lifestyle product.",
+      "VACATION is a sun-care and lifestyle brand built around leisure, nostalgia, and high-performance formulas.",
     stampLogo: "/partners/vacation/logo.png",
     images: [
       "/partners/vacation/hero.jpg",
@@ -159,7 +159,7 @@ export const partners: Partner[] = [
     slug: "zure-solaris",
     name: "Zure Solaris",
     description:
-      "Zure Solaris is a London-based after-sun and everyday skincare brand founded by creative director Samuel Cheney and photographer Aaron Hurley. Its formulas are built around the brand's Solar Repair Complex, developed to counteract both the immediate and long-term effects of sun exposure on skin. The four-product routine — a shower rinse, body treatment, cooling infusion, and essential serum — is finished with a signature scent of calamansi, violet leaf, ginger, amber, and woods, treating recovery from the sun as its own ritual rather than an afterthought.",
+      "ZURE SOLARIS explores light, scent, and ritual through distinctive beauty and wellness products.",
     stampLogo: "/partners/zure-solaris/logo.png",
     images: [
       "/partners/zure-solaris/hero.png",
