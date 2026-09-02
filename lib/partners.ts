@@ -32,7 +32,7 @@ export const partners: Partner[] = [
     ],
     links: {
       wholesale: "/contact",
-      instagram: "https://instagram.com/",
+      instagram: "https://instagram.com/dedcool",
       website: "https://dedcool.com",
     },
   },
@@ -51,8 +51,8 @@ export const partners: Partner[] = [
     ],
     links: {
       wholesale: "/contact",
-      instagram: "https://instagram.com/",
-      website: "#",
+      instagram: "https://instagram.com/facileskin",
+      website: "https://facileskin.com",
     },
   },
   {
@@ -70,8 +70,8 @@ export const partners: Partner[] = [
     ],
     links: {
       wholesale: "/contact",
-      instagram: "https://instagram.com/",
-      website: "#",
+      instagram: "https://instagram.com/natureofthings",
+      website: "https://natureofthings.com",
     },
   },
   {
@@ -88,8 +88,8 @@ export const partners: Partner[] = [
     ],
     links: {
       wholesale: "/contact",
-      instagram: "https://instagram.com/",
-      website: "#",
+      instagram: "https://instagram.com/skyhighfarmgoods",
+      website: "https://skyhighfarmgoods.com",
     },
   },
   {
@@ -105,8 +105,8 @@ export const partners: Partner[] = [
     ],
     links: {
       wholesale: "/contact",
-      instagram: "https://instagram.com/",
-      website: "#",
+      instagram: "https://instagram.com/thegreymensskincare",
+      website: "https://thegreymensskincare.com",
     },
   },
   {
@@ -127,8 +127,8 @@ export const partners: Partner[] = [
     ],
     links: {
       wholesale: "/contact",
-      instagram: "https://instagram.com/",
-      website: "#",
+      instagram: "https://instagram.com/tsulangeyor",
+      website: "https://tsu-lange-yor.au",
     },
   },
   {
@@ -152,8 +152,8 @@ export const partners: Partner[] = [
     ],
     links: {
       wholesale: "/contact",
-      instagram: "https://instagram.com/",
-      website: "#",
+      instagram: "https://instagram.com/vacationinc",
+      website: "https://vacation.inc",
     },
   },
   {
@@ -171,8 +171,8 @@ export const partners: Partner[] = [
     ],
     links: {
       wholesale: "/contact",
-      instagram: "https://instagram.com/",
-      website: "#",
+      instagram: "https://instagram.com/zuresolaris",
+      website: "https://zuresolaris.com",
     },
   }
 ];
