@@ -78,7 +78,7 @@ export const partners: Partner[] = [
     slug: "sky-high-farm-goods",
     name: "Sky High Farm Goods",
     description:
-      "SKY HIGH FARM GOODS brings farm-driven goods and regenerative agriculture into everyday beauty and lifestyle.",
+      "Sky High Farm Goods is a mission-led lifestyle brand built to support the work of Sky High Farm, a nonprofit working farm that ensures everyone has access to high-quality, culturally appropriate food. Inspired by the land and those who steward it, the brand draws on deep relationships with the farmers who grow its ingredients and their generational knowledge of the land. Its formulations, scent profiles, and palettes evoke fresh produce and the earth, using regeneratively grown ingredients picked at peak potency, with the belief that beauty is nature's eternal wisdom and, in nature, every process fuels another.",
     stampLogo: "/partners/sky-high-farm-goods/logo.png",
     images: [
       "/partners/sky-high-farm-goods/hero.jpeg",
