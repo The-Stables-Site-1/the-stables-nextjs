@@ -6,7 +6,7 @@ import { site } from "@/lib/site";
 
 export const metadata: Metadata = createPageMetadata({
   title:
-    "Commercial Team and Operating Layer for Beauty, Fragrance, Wellness, and Lifestyle Brands",
+    "The Stables — Commercial Team and Operating Layer for Beauty, Fragrance, Wellness, and Lifestyle Brands",
   description: site.description,
   path: "/",
   absoluteTitle: true,
