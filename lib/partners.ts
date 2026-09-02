@@ -22,7 +22,7 @@ export const partners: Partner[] = [
     slug: "dedcool",
     name: "DedCool",
     description:
-      "DedCool is a functional fragrance brand that empowers all people to smell and feel good through scent. The brand is on a mission to reshape the way fragrance is defined and experienced, built on the belief that everyone should have a signature scent that extends beyond a glass bottle. DedCool brings fragrance into everyday routines through unexpected mediums - from laundry detergent, to car air fresheners, and pets- so scent becomes a practical, integrated part of daily life.",
+      "DedCool is a functional fragrance brand that empowers all people to smell and feel good through scent. The brand is on a mission to reshape the way fragrance is defined and experienced, built on the belief that everyone should have a signature scent that extends beyond a glass bottle. DedCool brings fragrance into everyday routines through unexpected mediums — from laundry detergent, to car air fresheners, and pets — so scent becomes a practical, integrated part of daily life.",
     stampLogo: PLACEHOLDER_LOGO,
     images: [
       "/partners/dedcool/hero.jpg",
@@ -40,11 +40,7 @@ export const partners: Partner[] = [
     slug: "facile",
     name: "Facile",
     description:
-      "We believe good skincare should work for everyone. That's why Facile is built on doctor-led, proven ingredients that are non-toxic, effective, and feel-good. With intentional formulations and clinical results, achieving good skin is finally easy.",
-    descriptionBlocks: [
-      "A Simplified, Clinically Kind, Dermatologist-Formulated Approach To Happy Skin.",
-      "We believe good skincare should work for everyone. That's why Facile is built on doctor-led, proven ingredients that are non-toxic, effective, and feel-good. With intentional formulations and clinical results, achieving good skin is finally easy.",
-    ],
+      "Facile is a simplified, clinically kind, dermatologist-formulated approach to happy skin. Built on the belief that good skincare should work for everyone, Facile is made with doctor-led, proven ingredients that are non-toxic, effective, and feel-good. With intentional formulations and clinical results, achieving good skin is finally easy.",
     stampLogo: "/partners/facile/logo.png",
     images: [
       "/partners/facile/hero.jpg",
