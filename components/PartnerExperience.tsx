@@ -178,9 +178,10 @@ export function PartnerExperience({ partner }: PartnerExperienceProps) {
             >
               <InfoBox
                 body={
-                  homeContent ? site.information : partner.description
+                  homeContent ? site.informationBox : (partner.descriptionBlocks ?? partner.description)
                 }
                 moreHref={homeContent ? "/about" : undefined}
+                fit
                 open={detailOpen}
                 onOpenChange={setPanelOpen}
                 collapsedHeight={0}

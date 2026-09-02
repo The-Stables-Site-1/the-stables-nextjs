@@ -45,10 +45,10 @@ const CONTACT_REVEAL_STEPS = 4;
 /** Set to true to restore the horse intro loader. */
 const SHOW_HORSE_LOADER = false;
 
-const IDLE_MS = 4000;
+const IDLE_MS = 500;
 
 /** Idle stamping cadence: one impression at a time, never lifted. */
-const STAMP_GAP_MS = 1500;
+const STAMP_GAP_MS = 600;
 /** Ceiling on accumulated impressions, so the page cannot grow forever. */
 const MAX_STAMPS = 16;
 
@@ -314,7 +314,20 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
       height: window.innerHeight,
       seed: randomSeed(),
       avoid: column
-        ? { x: column.left, y: column.top, w: column.width, h: column.height }
+        ? {
+            x: column.left,
+            y: column.top,
+            w: column.width,
+            // Idle stamps live on the z-0 layer, behind the opaque z-10 content
+            // column, so anything under the column is hidden anyway. The keep-out
+            // rect only needs to cover roughly the collapsed column height; when
+            // the fit INFORMATION box grows the column taller, clamping the
+            // height stops that growth from shrinking (starving) the placeable
+            // area. Any stamp behind the grown box stays hidden, so this cannot
+            // print over the readable text. Cap ~= pre-fit column height
+            // (address + info + partners + contact).
+            h: Math.min(column.height, 600),
+          }
         : null,
     };
   };
@@ -375,7 +388,12 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
           });
         }
         index = 0;
-        if (!plan.length) return;
+        // An empty plan (e.g. the layout momentarily starves placement) must not
+        // kill the loop — retry later so the field keeps filling as things settle.
+        if (!plan.length) {
+          stampTimerRef.current = window.setTimeout(pressNext, STAMP_GAP_MS);
+          return;
+        }
       }
 
       const placement = plan[index];
@@ -486,11 +504,12 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
   const infoBox = (
     <div>
       <InfoBox
-        body={morphPartner ? morphPartner.description : site.information}
+        body={morphPartner ? (morphPartner.descriptionBlocks ?? morphPartner.description) : site.informationBox}
         moreHref={morphPartner ? undefined : "/about"}
         showTitle={reveal >= infoTitleAt}
         showBody={reveal >= infoBodyAt}
         opaque={ready || hasVisuals}
+        fit
       />
     </div>
   );
