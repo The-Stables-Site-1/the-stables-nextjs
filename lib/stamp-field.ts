@@ -1,5 +1,7 @@
 import { STAMP_ART_H, STAMP_ART_W } from "@/lib/morph";
-import { stampBoxSize, type StampInk } from "@/lib/silkscreen-gl";
+import { STAMP_WEAR, stampBoxSize, type StampInk } from "@/lib/silkscreen-gl";
+
+export { STAMP_WEAR };
 
 /** Mail-art pad colours: office rubber-stamp inks, muted for cream stock. */
 export const STAMP_INKS: StampInk[] = [
@@ -30,6 +32,8 @@ export type StampPlacement = {
   ink: StampInk;
   seed: number;
   pressure: number;
+  wear: number;
+  pressDir: readonly [number, number];
 };
 
 export type StampLogo = {
@@ -392,6 +396,11 @@ export function planStampField({
       ink: inks[inkIndex],
       seed: rand(),
       pressure: rand(),
+      wear: Math.min(0.85, Math.max(0.15, STAMP_WEAR + (rand() - 0.5) * 0.36)),
+      pressDir: (() => {
+        const a = rand() * Math.PI * 2;
+        return [Math.cos(a), Math.sin(a)] as const;
+      })(),
     });
   }
 

@@ -89,7 +89,11 @@ export function ContactLinks({
       {rows.map((row, index) => {
         const className = `${rowClass} justify-start`;
         const label = (
-          <span className={index + 1 < revealed ? "opacity-100" : "opacity-0"}>
+          <span
+            className={`translate-y-px ${
+              index + 1 < revealed ? "opacity-100" : "opacity-0"
+            }`}
+          >
             {row.label}
           </span>
         );

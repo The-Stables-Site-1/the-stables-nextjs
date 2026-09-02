@@ -27,7 +27,6 @@ export function AboutExperience() {
                 body={section.body}
                 opaque
                 fit
-                indent
               />
             </div>
           ))}

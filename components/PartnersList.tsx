@@ -120,7 +120,7 @@ export function PartnersList({
               <Link
                 href={`/partners/${partner.slug}`}
                 data-partner-slug={partner.slug}
-                className={`relative flex h-[32px] items-center px-3 text-[11px] text-black ${
+                className={`relative flex h-[32px] items-center px-3 text-[12px] text-black ${
                   index < partners.length - 1
                     ? "border-b-[0.75px] border-ink"
                     : ""
@@ -141,7 +141,7 @@ export function PartnersList({
                 }}
               >
                 <span
-                  className={`uppercase tracking-[0.04em] ${
+                  className={`translate-y-px uppercase tracking-[0.04em] ${
                     index < revealedCount ? "opacity-100" : "opacity-0"
                   }`}
                 >

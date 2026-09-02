@@ -34,6 +34,7 @@ type StampBoxProps = {
   visible?: boolean;
   blend?: boolean;
   seed?: string;
+  source?: HTMLCanvasElement | null;
 };
 
 /** Halftone partner stamp, crooked like a rubber stamp, fitted to the module. */
@@ -43,11 +44,12 @@ export function StampBox({
   visible = true,
   blend = true,
   seed,
+  source = null,
 }: StampBoxProps) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const printedSrc = useRef<string | null>(null);
-  const [ready, setReady] = useState(false);
+  const [ready, setReady] = useState(source != null);
   const [fallback, setFallback] = useState(false);
   const [box, setBox] = useState<{ w: number; h: number }>({
     w: STAMP_ART_W,
@@ -79,30 +81,42 @@ export function StampBox({
   useLayoutEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || fallback) return;
-    const printer = getSilkscreenPrinter();
-    if (!printer) {
-      setFallback(true);
-      return;
-    }
 
     const dpr = Math.min(window.devicePixelRatio || 1, DPR_CAP);
     const tw = Math.max(1, Math.round(box.w * dpr));
     const th = Math.max(1, Math.round(box.h * dpr));
 
-    const draw = (bitmap: ImageBitmap) => {
-      canvas.width = bitmap.width;
-      canvas.height = bitmap.height;
+    const draw = (drawable: CanvasImageSource) => {
+      const size = drawable as { width?: number; height?: number };
+      if (!size.width || !size.height) return false;
+      canvas.width = size.width;
+      canvas.height = size.height;
       const ctx = canvas.getContext("2d");
-      if (!ctx) return;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(bitmap, 0, 0);
+      if (!ctx) return false;
+      try {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(drawable, 0, 0);
+        canvas.style.opacity = "1";
+        return true;
+      } catch {
+        return false;
+      }
     };
 
-    const finished = printer.peekStamp?.(src, tw, th, 1);
-    if (finished) {
-      draw(finished);
+    if (source && draw(source)) {
       printedSrc.current = src;
-      setReady(true);
+      return;
+    }
+
+    const printer = getSilkscreenPrinter();
+    if (!printer) {
+      queueMicrotask(() => setFallback(true));
+      return;
+    }
+
+    const finished = printer.peekStamp?.(src, tw, th, 1);
+    if (finished && draw(finished)) {
+      printedSrc.current = src;
       return;
     }
 
@@ -110,20 +124,23 @@ export function StampBox({
     let cancelled = false;
 
     void (async () => {
-      const bitmap = await printer.printStamp(src, tw, th, 1, true);
+      const drawable = await printer.copyStamp(src, tw, th, 1, true);
       if (cancelled) return;
-      if (!bitmap) {
+      if (!drawable) {
         setFallback(true);
         return;
       }
-      draw(bitmap);
+      if (!draw(drawable)) {
+        setFallback(true);
+        return;
+      }
       setReady(true);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [src, box, fallback]);
+  }, [src, box, fallback, source]);
 
   return (
     <div
@@ -148,7 +165,9 @@ export function StampBox({
             aria-hidden={alt ? undefined : true}
             role={alt ? "img" : undefined}
             aria-label={alt || undefined}
-            className={`h-full w-full ${ready ? "opacity-100" : "opacity-0"}`}
+            className={`h-full w-full ${
+              ready || source ? "opacity-100" : "opacity-0"
+            }`}
           />
         )}
       </div>

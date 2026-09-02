@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useLayoutEffect, useRef } from "react";
 import { StampBox } from "@/components/StampBox";
 import { STAMP_BOX_ASPECT_RATIO, STAMP_BOX_H } from "@/lib/morph";
+import type { PartnerLogoHandoff } from "@/lib/partner-transition";
 import { brandStampLogo } from "@/lib/partners";
 
 const HOME_LOGO_POSITION_KEY = "the-stables:home-logo-position:business-card";
@@ -33,6 +34,7 @@ type AddressBoxProps = {
   opaque?: boolean;
   href?: string;
   onBack?: () => void;
+  logoHandoff?: PartnerLogoHandoff | null;
 };
 
 export function AddressBox({
@@ -41,6 +43,7 @@ export function AddressBox({
   opaque = false,
   href,
   onBack,
+  logoHandoff = null,
 }: AddressBoxProps) {
   const logoRef = useRef<HTMLDivElement>(null);
   const partnerLogoRef = useRef<HTMLDivElement>(null);
@@ -49,7 +52,6 @@ export function AddressBox({
 
   const displayedLogo = lastLogoRef.current;
   const partnerLogoSrc = logo?.src;
-  const partnerLogoAlt = logo?.alt;
 
   useLayoutEffect(() => {
     const stablesLogo = logoRef.current;
@@ -76,26 +78,17 @@ export function AddressBox({
     const partnerLogo = partnerLogoRef.current;
     if (!partnerLogo) return;
     partnerLogo.style.opacity = "0";
-    if (!partnerLogoSrc || !showLogo) return;
-
-    const positionKey = `the-stables:partner-logo-position:business-card:${partnerLogoSrc}`;
-    let position = readPosition(positionKey);
-    if (position) {
-      window.sessionStorage.removeItem(positionKey);
-    } else {
-      position = {
-        left: Math.round(-8 + Math.random() * 16),
-        top: Math.round(-6 + Math.random() * 12),
-        scale: 1.12 + Math.random() * 0.12,
-      };
-      if (!href) {
-        window.sessionStorage.setItem(positionKey, JSON.stringify(position));
-      }
+    if (
+      !partnerLogoSrc ||
+      !showLogo ||
+      logoHandoff?.src !== partnerLogoSrc
+    ) {
+      return;
     }
 
-    partnerLogo.style.transform = `translate(${position.left}px, ${position.top}px) scale(${position.scale ?? 1})`;
+    partnerLogo.style.transform = logoHandoff.transform;
     partnerLogo.style.opacity = "1";
-  }, [href, partnerLogoAlt, partnerLogoSrc, showLogo]);
+  }, [logoHandoff, partnerLogoSrc, showLogo]);
 
   const className = `relative block w-[335px] overflow-hidden border-[0.75px] border-ink max-[599px]:w-full ${
     opaque || showLogo ? "bg-cream" : "bg-transparent"
@@ -139,6 +132,11 @@ export function AddressBox({
             src={displayedLogo.src}
             alt={displayedLogo.alt}
             seed={displayedLogo.alt}
+            source={
+              logoHandoff?.src === displayedLogo.src
+                ? logoHandoff.source
+                : null
+            }
           />
         </div>
       ) : null}

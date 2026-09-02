@@ -1,9 +1,7 @@
 const p1 =
   "THE STABLES is a New York-based commercial team and operating layer for distinctive beauty, fragrance, wellness, and lifestyle brands building stronger retail distribution.";
 const p2 =
-  "We work in the space between taste and traction, connecting founder vision, buyer relationships, and disciplined follow-through to measurable commercial growth.";
-const p3 =
-  "Part sales team, part distribution partner, part retail strategy layer, part operating system, The Stables helps brands turn retail opportunity into a more focused, disciplined, and commercially useful channel.";
+  "We work in the space between taste and traction, connecting founder vision, buyer relationships, and disciplined follow-through to measurable commercial growth. Part sales team, part distribution partner, part retail strategy layer, part operating system, The Stables helps brands turn retail opportunity into a more focused, disciplined, and commercially useful channel.";
 const p4 =
   "We sit between founder ambition, buyer expectations, wholesale operations, and the day-to-day follow-through required to make distribution perform. Our work spans retail strategy, account prioritization, wholesale sales, buyer outreach, distribution management, launch execution, reporting, reorder cadence, and the operating rhythm behind stronger specialty retail growth.";
 const p5 =
@@ -33,7 +31,7 @@ export const site = {
   about: [
     {
       title: "INFORMATION",
-      body: [p1, p2, p3, p4, p5],
+      body: [p1, p2, p4, p5],
     },
   ],
   links: {

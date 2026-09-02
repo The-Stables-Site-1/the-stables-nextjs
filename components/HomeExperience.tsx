@@ -20,6 +20,10 @@ import {
 } from "@/lib/morph";
 import type { Partner } from "@/lib/partners";
 import {
+  beginPartnerLogoHandoff,
+  type PartnerLogoHandoff,
+} from "@/lib/partner-transition";
+import {
   disposeSilkscreenPrinter,
   getSilkscreenPrinter,
 } from "@/lib/silkscreen-gl";
@@ -82,6 +86,7 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
   const [modulesIn, setModulesIn] = useState(() =>
     hasAppBooted() ? MODULE_COUNT : 0,
   );
+  const pageRef = useRef<HTMLDivElement>(null);
   const addressRef = useRef<HTMLDivElement>(null);
   const asideRef = useRef<HTMLElement>(null);
   const introTimersRef = useRef<number[]>([]);
@@ -89,6 +94,8 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
   const [locked, setLocked] = useState(false);
   const [logosReady, setLogosReady] = useState(false);
   const [morphPartner, setMorphPartner] = useState<Partner | null>(null);
+  const [logoHandoff, setLogoHandoff] =
+    useState<PartnerLogoHandoff | null>(null);
   const [previewSlug, setPreviewSlug] = useState<string | null>(null);
   const [stamps, setStamps] = useState<StampInstance[]>([]);
   const morphTimersRef = useRef<number[]>([]);
@@ -307,17 +314,23 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
   };
 
   const ready = phase === "ready";
-  const stampViewport = () => {
-    const column = asideRef.current?.getBoundingClientRect();
+  const stampSurface = () => {
+    const page = pageRef.current;
+    const column = asideRef.current;
+    const pageBox = page?.getBoundingClientRect();
+    const columnBox = column?.getBoundingClientRect();
+
     return {
-      width: window.innerWidth,
-      height: window.innerHeight,
+      // client dimensions reflect the page's normal-flow content without
+      // letting deliberately overhanging absolute stamps enlarge the next plan.
+      width: page?.clientWidth ?? document.documentElement.clientWidth,
+      height: page?.clientHeight ?? document.documentElement.clientHeight,
       seed: randomSeed(),
-      avoid: column
+      avoid: pageBox && columnBox
         ? {
-            x: column.left,
-            y: column.top,
-            w: column.width,
+            x: columnBox.left - pageBox.left,
+            y: columnBox.top - pageBox.top,
+            w: columnBox.width,
             // Idle stamps live on the z-0 layer, behind the opaque z-10 content
             // column, so anything under the column is hidden anyway. The keep-out
             // rect only needs to cover roughly the collapsed column height; when
@@ -326,7 +339,7 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
             // area. Any stamp behind the grown box stays hidden, so this cannot
             // print over the readable text. Cap ~= pre-fit column height
             // (address + info + partners + contact).
-            h: Math.min(column.height, 600),
+            h: Math.min(columnBox.height, 600),
           }
         : null,
     };
@@ -378,12 +391,12 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
       }
 
       if (index >= plan.length) {
-        const viewport = stampViewport();
-        plan = planStampField({ logos: logosRef.current, ...viewport });
+        const surface = stampSurface();
+        plan = planStampField({ logos: logosRef.current, ...surface });
         if (!plan.length) {
           plan = planStampField({
             logos: logosRef.current,
-            ...viewport,
+            ...surface,
             avoid: null,
           });
         }
@@ -454,20 +467,35 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
       return;
     }
 
-    void heroReady.then(() => setPreviewSlug(slug));
     if (reduceMotion) {
-      void heroReady.then(() => router.push(href));
+      void Promise.all([
+        heroReady,
+        beginPartnerLogoHandoff(partner.stampLogo, partner.name),
+      ]).then(([, handoff]) => {
+        setLogoHandoff(handoff);
+        router.push(href);
+      });
       return;
     }
 
-    setMorphPartner(partner);
+    void Promise.all([
+      heroReady,
+      beginPartnerLogoHandoff(partner.stampLogo, partner.name),
+    ]).then(([, handoff]) => {
+      if (!lockedRef.current) return;
+      setPreviewSlug(slug);
+      setLogoHandoff(handoff);
+      setMorphPartner(partner);
 
-    morphTimersRef.current.push(
-      window.setTimeout(
-        () => void heroReady.then(() => router.push(href)),
-        ROUTE_MORPH_MS + LOGO_HOLD_MS,
-      ),
-    );
+      morphTimersRef.current.push(
+        window.setTimeout(
+          () => {
+            if (lockedRef.current) router.push(href);
+          },
+          ROUTE_MORPH_MS + LOGO_HOLD_MS,
+        ),
+      );
+    });
   };
 
   // Keep the idle loop pointed at the latest handlers without restarting it.
@@ -534,7 +562,7 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
   );
 
   return (
-    <div className="relative min-h-screen bg-cream">
+    <div ref={pageRef} className="paper-grain relative min-h-screen bg-cream">
       <Loader visible={phase === "loader"} />
 
       {phase === "hero" && introRect ? (
@@ -547,13 +575,9 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
       ) : null}
 
       <div
-        className="pointer-events-none fixed inset-0 z-0 isolate overflow-hidden bg-cream"
+        className="paper-grain visual-viewport-fixed pointer-events-none z-0 isolate overflow-hidden bg-cream"
         aria-hidden
       >
-        {stamps.map((stamp) => (
-          <LogoStamp key={stamp.id} placement={stamp.placement} />
-        ))}
-
         {previewPartner?.images[0] ? (
           <Image
             src={previewPartner.images[0]}
@@ -567,7 +591,20 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
       </div>
 
       <div
-        className={`relative z-10 flex min-h-screen items-center justify-center ${
+        className="pointer-events-none absolute inset-0 z-0 isolate overflow-hidden"
+        aria-hidden
+      >
+        {stamps.map((stamp) => (
+          <LogoStamp key={stamp.id} placement={stamp.placement} />
+        ))}
+      </div>
+
+      <div
+        className={`z-10 flex justify-center ${
+          morphing
+            ? "visual-viewport-fixed items-center"
+            : "relative min-h-screen items-start"
+        } ${
           phase === "loader" ? "opacity-0" : "opacity-100"
         }`}
       >
@@ -592,6 +629,7 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
                     }
                   : undefined
               }
+              logoHandoff={logoHandoff}
             />
           </div>
 
