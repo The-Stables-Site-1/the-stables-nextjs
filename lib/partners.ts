@@ -96,7 +96,7 @@ export const partners: Partner[] = [
     slug: "the-grey",
     name: "The Grey",
     description:
-      "THE GREY is a distinctive lifestyle and wellness brand built around quiet luxury and intentional living.",
+      "The Grey is a men's skincare and self-care brand, founded in 2018 with the mission of giving men the confidence to take their wellness and grooming seriously. Beauty retail has rarely made room for men, with products and advice built for someone else. The Grey was created to change that: an inclusive destination dedicated to men's skin care, beauty, and self-care, offering premium products with the no-nonsense guidance men need to choose for themselves. It's not about vanity, but about looking and feeling your best.",
     stampLogo: "/partners/the-grey/logo.png",
     images: [
       "https://hwyuivyawr7vttnf.public.blob.vercel-storage.com/partners/the-grey/hero.jpeg",
@@ -113,7 +113,7 @@ export const partners: Partner[] = [
     slug: "tsu-lange-yor",
     name: "Tsu Lange Yor",
     description:
-      "TSU LANGE YOR is a distinctive fragrance and lifestyle brand with a singular aesthetic voice.",
+      "Tsu Lange Yor is an Australian fragrance house founded by Troye Sivan. The brand's collection of fragrances and objects is designed to elevate both person and place. Deeply rooted in its home, Tsu Lange Yor develops each product in partnership with exceptional local talent and native materials, crafted to a rigorous standard of quality.",
     stampLogo: "/partners/tsu-lange-yor/logo.png",
     images: [
       "/partners/tsu-lange-yor/hero.jpeg",
