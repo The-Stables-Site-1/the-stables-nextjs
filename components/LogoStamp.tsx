@@ -8,6 +8,8 @@ import {
 import { STAMP_PAD, type StampPlacement } from "@/lib/stamp-field";
 
 const DPR_CAP = 1.25;
+/** Erosion fleck size in device px — chunky enough to read as broken ink. */
+const GRAIN = 1.9;
 
 function devicePixelRatio() {
   if (typeof window === "undefined") return 1;
@@ -44,9 +46,7 @@ export function LogoStamp({ placement }: LogoStampProps) {
         progress: 1,
         pressure: placement.pressure,
         seed: placement.seed,
-        wear: placement.wear,
-        pressDir: placement.pressDir,
-        paper: [placement.x * dpr, placement.y * dpr],
+        grain: GRAIN * dpr,
         ink: placement.ink,
       });
       if (cancelled || !ok) return;

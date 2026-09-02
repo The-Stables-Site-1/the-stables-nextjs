@@ -3,8 +3,6 @@
  * Safety: no idle loop, hard RAF/time caps, tiny textures, one context.
  */
 
-import { buildLogoSdf, type LogoSdf } from "@/lib/logo-sdf";
-
 export const CREAM_RGB = [250 / 255, 246 / 255, 233 / 255] as const;
 
 /** Frame ladders shared by the home plates and the partner slideshow. */
@@ -209,26 +207,21 @@ const FRAG = /* glsl */ `
 `;
 
 /**
- * Rubber-stamp pass. The logo is a coverage SDF; wear, pressure, and paper
- * grain decide where ink actually transferred. Noise lives in logo-local UV
- * so holes stay put if the mark is scaled or rotated on the page.
+ * Rubber-stamp pass. The logo art is sampled through a rotated frame while all
+ * noise stays in paper space, so the ink reads as pressed onto the page rather
+ * than as a rotated picture of ink.
  */
 const STAMP_FRAG = /* glsl */ `
   precision mediump float;
 
-  uniform sampler2D uSdf;
-  uniform vec2 uSdfSize;
-  uniform float uSdfPad;
-  uniform float uSdfRange;
+  uniform sampler2D uTex;
   uniform vec2 uRes;
   uniform vec2 uArt;
   uniform float uRot;
   uniform float uProgress;
   uniform float uPressure;
   uniform float uSeed;
-  uniform float uWear;
-  uniform vec2 uPressDir;
-  uniform vec2 uPaper;
+  uniform float uGrain;
   uniform vec3 uInk;
 
   varying vec2 vUv;
@@ -248,78 +241,78 @@ const STAMP_FRAG = /* glsl */ `
     return mix(mix(a, b, w.x), mix(c, d, w.x), w.y);
   }
 
-  float fbm(vec2 p) {
-    float s = 0.0;
-    float a = 0.5;
-    s += a * vnoise(p);
-    p *= 2.03;
-    a *= 0.5;
-    s += a * vnoise(p);
-    p *= 2.01;
-    a *= 0.5;
-    s += a * vnoise(p);
-    p *= 2.02;
-    a *= 0.5;
-    s += a * vnoise(p);
-    return s;
+  float coverage(vec2 uv) {
+    if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) return 0.0;
+    float luma = dot(texture2D(uTex, uv).rgb, vec3(0.299, 0.587, 0.114));
+    return clamp((0.9 - luma) * 2.4, 0.0, 1.0);
   }
 
   void main() {
     vec2 px = (vUv - 0.5) * uRes;
     float ease = uProgress * uProgress * (3.0 - 2.0 * uProgress);
 
-    float seed2 = hash(vec2(uSeed, 3.17));
-    float seed3 = hash(vec2(uSeed, 8.91));
-    float wobble = (hash(vec2(uSeed, 0.17)) - 0.5) * 0.0698;
-    float cs = cos(uRot + wobble);
-    float sn = sin(uRot + wobble);
-    vec2 local = vec2(px.x * cs - px.y * sn, px.x * sn + px.y * cs);
+    // Uneven inking: broad wet/dry drifts plus a tilt so one side prints heavier.
+    vec2 gp = px + uSeed * 137.0;
+    float field = vnoise(gp * 0.055) * 0.5
+                + vnoise(gp * 0.17) * 0.32
+                + vnoise(gp * 0.53) * 0.18;
+    vec2 tilt = vec2(cos(uSeed * 6.28), sin(uSeed * 4.71));
+    field = clamp(field + dot(tilt, px / max(uRes.x, 1.0)) * 0.6, 0.0, 1.0);
 
-    float sx = 1.0 + (seed2 - 0.5) * 0.04;
-    float shear = (seed3 - 0.5) * 0.02;
-    local = vec2(local.x * sx + local.y * shear, local.y);
+    // A die is rigid: the letterforms never move, only the inking varies.
+    float cs = cos(uRot);
+    float sn = sin(uRot);
+    vec2 art = vec2(px.x * cs - px.y * sn, px.x * sn + px.y * cs);
+    vec2 uv = art / uArt + 0.5;
 
-    vec2 nrm = local / max(uArt, vec2(1.0));
-    local *= 1.0 - 0.02 * dot(nrm, nrm);
+    // Ink squeezes out from under the die, but only just.
+    vec2 b = (1.0 / uArt) * mix(0.3, 1.1, ease) * mix(0.5, 1.15, uPressure);
+    float dil = coverage(uv);
+    dil = max(dil, coverage(uv + vec2(b.x, 0.0)) * 0.9);
+    dil = max(dil, coverage(uv - vec2(b.x, 0.0)) * 0.9);
+    dil = max(dil, coverage(uv + vec2(0.0, b.y)) * 0.9);
+    dil = max(dil, coverage(uv - vec2(0.0, b.y)) * 0.9);
+    dil = max(dil, coverage(uv + b * 0.72) * 0.78);
+    dil = max(dil, coverage(uv - b * 0.72) * 0.78);
+    dil = max(dil, coverage(uv + vec2(b.x, -b.y) * 0.72) * 0.78);
+    dil = max(dil, coverage(uv - vec2(b.x, -b.y) * 0.72) * 0.78);
 
-    vec2 uvL = local / max(uArt, vec2(1.0)) + 0.5;
-    vec2 inner = max(uSdfSize - 2.0 * uSdfPad, vec2(1.0));
-    vec2 sdfUv = (uvL * inner + uSdfPad) / uSdfSize;
+    float force = mix(0.55, 1.2, uPressure) * ease;
+    float shape = smoothstep(0.42, 0.6, dil * force * 1.6);
+    float interior = smoothstep(0.5, 0.95, dil);
 
-    float dPx;
-    if (sdfUv.x < 0.0 || sdfUv.x > 1.0 || sdfUv.y < 0.0 || sdfUv.y > 1.0) {
-      dPx = 64.0;
-    } else {
-      float enc = texture2D(uSdf, sdfUv).r;
-      float dTex = (enc * 2.0 - 1.0) * uSdfRange;
-      dPx = dTex * (uArt.x / inner.x);
-    }
+    // A light plate-pass screen. Dots overlap so interiors stay mostly solid
+    // and the grid only shows as a faint thinning of the ink.
+    float cellPx = max(uGrain * 1.7, 1.2);
+    vec2 grid = px / cellPx;
+    vec2 cell = floor(grid);
+    vec2 local = fract(grid) - 0.5;
+    float cn = hash(cell + uSeed * 53.0);
+    float cn2 = hash(cell + vec2(19.1, 7.7));
+    float tone = clamp(dil * mix(0.88, 1.12, field), 0.0, 1.0);
+    float radius = tone * mix(0.78, 0.98, cn);
+    vec2 dotUv = local * vec2(0.99 + cn * 0.03, 1.02 - cn2 * 0.03)
+               + (vec2(cn2, cn) - 0.5) * 0.016;
+    float dots = smoothstep(radius + 0.08, radius - 0.12, length(dotUv));
+    // Density variation only — the screen no longer punches holes in the die.
+    float screen = mix(0.9, 1.0, dots);
 
-    vec2 uvIso = (uvL - 0.5) * vec2(1.0, uArt.y / max(uArt.x, 1.0)) + 0.5;
-    uvIso += uSeed * 5.3;
-    float erode = 0.006 * uArt.x * mix(0.6, 1.6, uWear);
-    dPx += (fbm(uvIso * 25.0) - 0.5) * erode;
-    dPx -= ease * mix(0.3, 1.4, uPressure);
+    // Sparse flecks at the edges. Interiors stay filled so the mark reads as
+    // ink, not as a second halftone.
+    vec2 gq = floor(px / max(uGrain, 0.5));
+    float ord = fract(dot(gq, vec2(0.5, 0.25)) + 0.125);
+    float d = mix(hash(gq + uSeed * 31.0), ord, 0.4);
+    float keep = clamp(mix(0.9, 1.22, field)
+                     * mix(0.92, 1.14, interior)
+                     * (0.84 + 0.2 * ease), 0.0, 1.0);
+    float grit = step(d, keep);
 
-    float cov = clamp(0.5 - dPx, 0.0, 1.0);
+    grit *= step(0.1 - 0.08 * ease, vnoise(gp * 0.042 + 11.3));
+    grit *= step(0.018, hash(floor(px / max(uGrain * 2.4, 1.0)) + uSeed * 7.0));
 
-    float fine = fbm(uvIso * 60.0);
-    float mid = fbm(uvIso * 12.0 + 17.0);
-    float n = fine * 0.55 + mid * 0.45;
-    float np = fbm((px + uPaper) * 0.06 + 31.0);
-    n = mix(n, np, 0.25);
-
-    float t = mix(0.38, 0.58, uWear);
-    t += dot(uPressDir, uvL - 0.5) * 0.24;
-    t += (vnoise(uvL * 1.5 + uSeed * 9.0) - 0.5) * 0.14;
-    t -= (uPressure - 0.5) * 0.1;
-    t += (1.0 - ease) * 0.3;
-    t += (1.0 - smoothstep(0.0, 1.5, max(-dPx, 0.0))) * 0.08;
-
-    float ink = cov * step(t, n);
-    float field = vnoise(uvL * 1.4 + uSeed * 4.0);
-    vec3 colour = uInk * mix(1.04, 0.96, field);
-    gl_FragColor = vec4(colour * ink, ink);
+    float alpha = clamp(shape * grit, 0.0, 1.0);
+    vec3 ink = clamp(uInk * mix(1.18, 0.9, field) * screen, 0.0, 1.0);
+    gl_FragColor = vec4(ink * alpha, alpha);
   }
 `;
 
@@ -350,16 +343,12 @@ function compile(
   gl: WebGLRenderingContext,
   type: number,
   source: string,
-  label = "shader",
 ): WebGLShader | null {
   const shader = gl.createShader(type);
   if (!shader) return null;
   gl.shaderSource(shader, source);
   gl.compileShader(shader);
   if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-    if (process.env.NODE_ENV !== "production") {
-      console.warn(`[gl] ${label} compile`, gl.getShaderInfoLog(shader));
-    }
     gl.deleteShader(shader);
     return null;
   }
@@ -427,54 +416,6 @@ function uploadTexture(
   scratch.height = 1;
 
   return { tex, w, h };
-}
-
-type SdfUpload = {
-  tex: WebGLTexture;
-  w: number;
-  h: number;
-  pad: number;
-  range: number;
-};
-
-type TextureEntry = {
-  tex: WebGLTexture;
-  w: number;
-  h: number;
-  sdf?: SdfUpload;
-};
-
-function uploadSdfTexture(
-  gl: WebGLRenderingContext,
-  sdf: LogoSdf,
-): SdfUpload | null {
-  const tex = gl.createTexture();
-  if (!tex) return null;
-  gl.bindTexture(gl.TEXTURE_2D, tex);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
-  gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, 1);
-  gl.texImage2D(
-    gl.TEXTURE_2D,
-    0,
-    gl.LUMINANCE,
-    sdf.w,
-    sdf.h,
-    0,
-    gl.LUMINANCE,
-    gl.UNSIGNED_BYTE,
-    sdf.data,
-  );
-  return {
-    tex,
-    w: sdf.w,
-    h: sdf.h,
-    pad: sdf.pad,
-    range: sdf.range,
-  };
 }
 
 export function createSilkscreenEngine(
@@ -970,47 +911,10 @@ export type LogoStampOptions = {
   /** 0 = starved die, 1 = flooded die. */
   pressure: number;
   seed: number;
-  /** 0 = fresh pad, 1 = dry / worn. */
-  wear: number;
-  /** Unit vector: the heavier side of the press. */
-  pressDir: readonly [number, number];
-  /** Page offset of this canvas in device px, for shared paper defects. */
-  paper: readonly [number, number];
+  /** Erosion fleck size in device px. */
+  grain: number;
   ink: StampInk;
 };
-
-/** Default card-stamp ink, matching the idle-field black. */
-export const STAMP_INK_BLACK: StampInk = [0.11, 0.11, 0.1];
-
-/** User-facing wear: 0 fresh pad, 1 dry / eaten. Field and card stamps orbit this. */
-export const STAMP_WEAR = 0.48;
-
-const CARD_STAMP_PAD = 8;
-
-function unitHash(input: string, salt = 0) {
-  let hash = 2166136261 ^ salt;
-  for (let i = 0; i < input.length; i += 1) {
-    hash ^= input.charCodeAt(i);
-    hash = Math.imul(hash, 16777619);
-  }
-  return (hash >>> 0) / 4294967296;
-}
-
-function cardStampLook(url: string) {
-  const seed = unitHash(url, 1);
-  const pressure = 0.42 + unitHash(url, 2) * 0.5;
-  const wear = Math.min(
-    0.85,
-    Math.max(0.15, STAMP_WEAR + (unitHash(url, 3) - 0.5) * 0.36),
-  );
-  const angle = unitHash(url, 4) * Math.PI * 2;
-  return {
-    seed,
-    pressure,
-    wear,
-    pressDir: [Math.cos(angle), Math.sin(angle)] as const,
-  };
-}
 
 /** Device-px canvas a rotated logo needs, including room for ink squeeze-out. */
 export function stampBoxSize(
@@ -1053,14 +957,6 @@ export type SilkscreenPrinter = {
     height: number,
     progress?: number,
   ) => ImageBitmap | null;
-  /** Copies a cached stamp into an independently owned, always-drawable canvas. */
-  copyStamp: (
-    url: string,
-    width: number,
-    height: number,
-    progress?: number,
-    urgent?: boolean,
-  ) => Promise<HTMLCanvasElement | null>;
   /** Loads and uploads an image up front, reporting its intrinsic size. */
   preload: (url: string) => Promise<{ w: number; h: number } | null>;
   /** Presses one coloured logo straight into a target 2D canvas. */
@@ -1139,7 +1035,7 @@ export function createSilkscreenPrinter(): SilkscreenPrinter | null {
     uContain: gl.getUniformLocation(program, "uContain"),
   };
 
-  const stampFs = compile(gl, gl.FRAGMENT_SHADER, STAMP_FRAG, "stamp-frag");
+  const stampFs = compile(gl, gl.FRAGMENT_SHADER, STAMP_FRAG);
   let stampProgram: WebGLProgram | null = null;
   let stampPos = -1;
   let stampLoc: Record<string, WebGLUniformLocation | null> | null = null;
@@ -1153,25 +1049,17 @@ export function createSilkscreenPrinter(): SilkscreenPrinter | null {
         stampProgram = linked;
         stampPos = gl.getAttribLocation(linked, "aPos");
         stampLoc = {
-          uSdf: gl.getUniformLocation(linked, "uSdf"),
-          uSdfSize: gl.getUniformLocation(linked, "uSdfSize"),
-          uSdfPad: gl.getUniformLocation(linked, "uSdfPad"),
-          uSdfRange: gl.getUniformLocation(linked, "uSdfRange"),
+          uTex: gl.getUniformLocation(linked, "uTex"),
           uRes: gl.getUniformLocation(linked, "uRes"),
           uArt: gl.getUniformLocation(linked, "uArt"),
           uRot: gl.getUniformLocation(linked, "uRot"),
           uProgress: gl.getUniformLocation(linked, "uProgress"),
           uPressure: gl.getUniformLocation(linked, "uPressure"),
           uSeed: gl.getUniformLocation(linked, "uSeed"),
-          uWear: gl.getUniformLocation(linked, "uWear"),
-          uPressDir: gl.getUniformLocation(linked, "uPressDir"),
-          uPaper: gl.getUniformLocation(linked, "uPaper"),
+          uGrain: gl.getUniformLocation(linked, "uGrain"),
           uInk: gl.getUniformLocation(linked, "uInk"),
         };
       } else {
-        if (process.env.NODE_ENV !== "production") {
-          console.warn("[gl] stamp link", gl.getProgramInfoLog(linked));
-        }
         gl.deleteProgram(linked);
       }
     }
@@ -1199,7 +1087,10 @@ export function createSilkscreenPrinter(): SilkscreenPrinter | null {
   let disposed = false;
   const cache = new Map<string, ImageBitmap>();
   const inflight = new Map<string, Promise<ImageBitmap | null>>();
-  const textures = new Map<string, TextureEntry>();
+  const textures = new Map<
+    string,
+    { tex: WebGLTexture; w: number; h: number }
+  >();
   const urgent: Array<() => Promise<void>> = [];
   const background: Array<() => Promise<void>> = [];
   let pumping = false;
@@ -1241,7 +1132,7 @@ export function createSilkscreenPrinter(): SilkscreenPrinter | null {
   };
 
   const paintStamp = (
-    sdf: SdfUpload,
+    tex: WebGLTexture,
     options: LogoStampOptions,
   ) => {
     if (!stampProgram || !stampLoc) return false;
@@ -1252,21 +1143,14 @@ export function createSilkscreenPrinter(): SilkscreenPrinter | null {
     gl.viewport(0, 0, canvas.width, canvas.height);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);
-    gl.uniform1i(stampLoc.uSdf, 0);
-    gl.uniform2f(stampLoc.uSdfSize, sdf.w, sdf.h);
-    gl.uniform1f(stampLoc.uSdfPad, sdf.pad);
-    gl.uniform1f(stampLoc.uSdfRange, sdf.range);
+    gl.uniform1i(stampLoc.uTex, 0);
     gl.uniform2f(stampLoc.uRes, canvas.width, canvas.height);
     gl.uniform2f(stampLoc.uArt, options.artW, options.artH);
     gl.uniform1f(stampLoc.uRot, (options.angle * Math.PI) / 180);
     gl.uniform1f(stampLoc.uProgress, options.progress);
     gl.uniform1f(stampLoc.uPressure, options.pressure);
     gl.uniform1f(stampLoc.uSeed, options.seed);
-    gl.uniform1f(stampLoc.uWear, options.wear ?? STAMP_WEAR);
-    const press = options.pressDir ?? [1, 0];
-    const paper = options.paper ?? [0, 0];
-    gl.uniform2f(stampLoc.uPressDir, press[0], press[1]);
-    gl.uniform2f(stampLoc.uPaper, paper[0], paper[1]);
+    gl.uniform1f(stampLoc.uGrain, options.grain);
     gl.uniform3f(
       stampLoc.uInk,
       options.ink[0],
@@ -1274,7 +1158,7 @@ export function createSilkscreenPrinter(): SilkscreenPrinter | null {
       options.ink[2],
     );
     gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, sdf.tex);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     return true;
   };
@@ -1294,38 +1178,8 @@ export function createSilkscreenPrinter(): SilkscreenPrinter | null {
     if (disposed) return null;
     const uploaded = uploadTexture(gl, scratch, img);
     if (!uploaded) return null;
-    const entry: TextureEntry = {
-      tex: uploaded.tex,
-      w: uploaded.w,
-      h: uploaded.h,
-    };
+    const entry = { tex: uploaded.tex, w: uploaded.w, h: uploaded.h };
     textures.set(url, entry);
-    return entry;
-  };
-
-  const getStampTexture = async (url: string) => {
-    let entry = textures.get(url);
-    if (entry?.sdf) return entry;
-    const img = await loadImage(url);
-    if (disposed) return null;
-    if (!entry) {
-      const uploaded = uploadTexture(gl, scratch, img);
-      if (!uploaded) return null;
-      entry = { tex: uploaded.tex, w: uploaded.w, h: uploaded.h };
-      textures.set(url, entry);
-    }
-    const started = performance.now();
-    const built = buildLogoSdf(img);
-    const elapsed = performance.now() - started;
-    if (process.env.NODE_ENV !== "production") {
-      console.debug(
-        `[stamp-sdf] ${url.split("/").pop()} ${elapsed.toFixed(1)}ms`,
-      );
-    }
-    if (!built || disposed) return null;
-    const sdf = uploadSdfTexture(gl, built);
-    if (!sdf) return null;
-    entry.sdf = sdf;
     return entry;
   };
 
@@ -1352,43 +1206,15 @@ export function createSilkscreenPrinter(): SilkscreenPrinter | null {
     height: number,
     progress: number,
   ): Promise<ImageBitmap | null> => {
-    if (disposed || !stampProgram) return null;
+    if (disposed) return null;
     const w = Math.max(1, Math.min(800, Math.round(width)));
     const h = Math.max(1, Math.min(400, Math.round(height)));
     canvas.width = w;
     canvas.height = h;
     try {
-      const tex = await getStampTexture(url);
-      if (!tex?.sdf || disposed) return null;
-      const innerW = Math.max(1, w - CARD_STAMP_PAD * 2);
-      const innerH = Math.max(1, h - CARD_STAMP_PAD * 2);
-      const texAspect =
-        (tex.sdf.w - tex.sdf.pad * 2) / Math.max(tex.sdf.h - tex.sdf.pad * 2, 1);
-      let artW = innerW;
-      let artH = innerH;
-      const boxAspect = artW / artH;
-      if (texAspect > boxAspect) {
-        artH = artW / texAspect;
-      } else {
-        artW = artH * texAspect;
-      }
-      const look = cardStampLook(url);
-      if (
-        !paintStamp(tex.sdf, {
-          artW,
-          artH,
-          angle: 0,
-          progress,
-          pressure: look.pressure,
-          seed: look.seed,
-          wear: look.wear,
-          pressDir: look.pressDir,
-          paper: [0, 0],
-          ink: STAMP_INK_BLACK,
-        })
-      ) {
-        return null;
-      }
+      const tex = await getTexture(url);
+      if (!tex || disposed) return null;
+      paint(tex.tex, tex.w, tex.h, progress, 0, true);
       return await snapshot();
     } catch {
       return null;
@@ -1401,8 +1227,7 @@ export function createSilkscreenPrinter(): SilkscreenPrinter | null {
     urgentJob: boolean,
   ) => {
     const hit = cache.get(key);
-    if (hit && hit.width > 0 && hit.height > 0) return Promise.resolve(hit);
-    if (hit) cache.delete(key);
+    if (hit) return Promise.resolve(hit);
     const pending = inflight.get(key);
     if (pending) return pending;
     const job = new Promise<ImageBitmap | null>((resolve) => {
@@ -1441,13 +1266,7 @@ export function createSilkscreenPrinter(): SilkscreenPrinter | null {
       return cache.get(frameKey(url, progress, color)) ?? null;
     },
     peekStamp(url, width, height, progress = 1) {
-      const key = stampKey(url, width, height, progress);
-      const hit = cache.get(key);
-      if (!hit || hit.width <= 0 || hit.height <= 0) {
-        if (hit) cache.delete(key);
-        return null;
-      }
-      return hit;
+      return cache.get(stampKey(url, width, height, progress)) ?? null;
     },
     print(url, progress = 1, color = 0, urgentJob = false) {
       if (disposed) return Promise.resolve(null);
@@ -1465,51 +1284,6 @@ export function createSilkscreenPrinter(): SilkscreenPrinter | null {
         urgentJob,
       );
     },
-    async copyStamp(
-      url,
-      width,
-      height,
-      progress = 1,
-      urgentJob = false,
-    ) {
-      const key = stampKey(url, width, height, progress);
-
-      const copy = (source: ImageBitmap) => {
-        if (source.width <= 0 || source.height <= 0) return null;
-        const owned = document.createElement("canvas");
-        owned.width = source.width;
-        owned.height = source.height;
-        const ctx = owned.getContext("2d");
-        if (!ctx) return null;
-        try {
-          ctx.drawImage(source, 0, 0);
-          return owned;
-        } catch {
-          return null;
-        }
-      };
-
-      let source = await enqueue(
-        key,
-        () => actuallyPrintStamp(url, width, height, progress),
-        urgentJob,
-      );
-      if (!source) return null;
-      let owned = copy(source);
-      if (owned) return owned;
-
-      // A consumer may have retained a cache-owned ImageBitmap past printer
-      // disposal. Evict that detached object and render a fresh source once.
-      if (cache.get(key) === source) cache.delete(key);
-      source = await enqueue(
-        key,
-        () => actuallyPrintStamp(url, width, height, progress),
-        true,
-      );
-      if (!source) return null;
-      owned = copy(source);
-      return owned;
-    },
     async preload(url) {
       if (disposed || !url) return null;
       try {
@@ -1521,17 +1295,17 @@ export function createSilkscreenPrinter(): SilkscreenPrinter | null {
     },
     async stampLogo(target, url, options) {
       if (disposed || !stampProgram) return false;
-      let tex: TextureEntry | null = null;
+      let tex: { tex: WebGLTexture; w: number; h: number } | null = null;
       try {
-        tex = await getStampTexture(url);
+        tex = await getTexture(url);
       } catch {
         return false;
       }
-      if (!tex?.sdf || disposed) return false;
+      if (!tex || disposed) return false;
 
-      const innerW = Math.max(tex.sdf.w - tex.sdf.pad * 2, 1);
-      const innerH = Math.max(tex.sdf.h - tex.sdf.pad * 2, 1);
-      const texAspect = innerW / innerH;
+      // The die is the image's own ratio. Contain it in the requested art box
+      // so a wrong placement aspect cannot squash or stretch the mark.
+      const texAspect = tex.w / Math.max(tex.h, 1);
       let artW = Math.max(options.artW, 1);
       let artH = Math.max(options.artH, 1);
       const boxAspect = artW / artH;
@@ -1546,7 +1320,7 @@ export function createSilkscreenPrinter(): SilkscreenPrinter | null {
       const h = Math.max(1, Math.min(1400, Math.round(target.height)));
       if (canvas.width !== w) canvas.width = w;
       if (canvas.height !== h) canvas.height = h;
-      if (!paintStamp(tex.sdf, { ...options, artW, artH })) return false;
+      if (!paintStamp(tex.tex, { ...options, artW, artH })) return false;
       const ctx = target.getContext("2d");
       if (!ctx) return false;
       ctx.clearRect(0, 0, target.width, target.height);
@@ -1561,10 +1335,7 @@ export function createSilkscreenPrinter(): SilkscreenPrinter | null {
       cache.forEach((bitmap) => bitmap.close());
       cache.clear();
       inflight.clear();
-      textures.forEach((entry) => {
-        gl.deleteTexture(entry.tex);
-        if (entry.sdf) gl.deleteTexture(entry.sdf.tex);
-      });
+      textures.forEach((entry) => gl.deleteTexture(entry.tex));
       textures.clear();
       if (empty) gl.deleteTexture(empty);
       gl.deleteBuffer(buf);
