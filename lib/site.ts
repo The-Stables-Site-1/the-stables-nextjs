@@ -39,6 +39,6 @@ export const site = {
   links: {
     wholesale: "/contact",
     press: "/contact",
-    instagram: "https://instagram.com/",
+    instagram: "https://www.instagram.com/thestables.world",
   },
 } as const;
