@@ -95,8 +95,8 @@ function pickAngle(rand: () => number) {
 /** Roughly one stamp per this much viewport area. */
 const AREA_PER_STAMP = 74000;
 /** Idle stamping is pointless once the modules cover the whole page. */
-const MIN_WIDTH = 700;
-const MIN_HEIGHT = 380;
+const MIN_WIDTH = 320;
+const MIN_HEIGHT = 480;
 /** How far a stamp can wander from its cell, as a share of the cell. */
 const CELL_JITTER = 0.95;
 /**
@@ -249,8 +249,9 @@ export function moduleStampArtSize(aspect: number, seed: string) {
   return { w: fitted.w * scale, h: fitted.h * scale };
 }
 
-function artSize(logo: StampLogo) {
-  return moduleStampArtSize(logo.aspect, logo.name || logo.src);
+function artSize(logo: StampLogo, scale: number) {
+  const { w, h } = moduleStampArtSize(logo.aspect, logo.name || logo.src);
+  return { w: w * scale, h: h * scale };
 }
 
 type PlanOptions = {
@@ -260,6 +261,8 @@ type PlanOptions = {
   seed: number;
   /** Centre content stamps must not cover. */
   avoid?: AvoidRect | null;
+  /** Shrinks logo art (and its area budget) for narrow phone viewports. 1 = desktop size. */
+  scale?: number;
 };
 
 /**
@@ -273,6 +276,7 @@ export function planStampField({
   height,
   seed,
   avoid,
+  scale = 1,
 }: PlanOptions): StampPlacement[] {
   if (!logos.length || width < MIN_WIDTH || height < MIN_HEIGHT) return [];
 
@@ -284,9 +288,11 @@ export function planStampField({
   const usable = Math.max(0, width * height - blocked);
 
   const rand = mulberry32(seed);
+  // Smaller stamps need proportionally less area each to read as an even field.
+  const areaPerStamp = AREA_PER_STAMP * scale * scale;
   const count = Math.max(
     8,
-    Math.min(20, Math.round((usable || width * height) / AREA_PER_STAMP)),
+    Math.min(20, Math.round((usable || width * height) / areaPerStamp)),
   );
   const cols = Math.max(1, Math.round(Math.sqrt((count * width) / height)));
   const rows = Math.max(1, Math.ceil(count / cols));
@@ -332,7 +338,7 @@ export function planStampField({
     }
     used.add(inkIndex);
 
-    const { w, h } = artSize(logo);
+    const { w, h } = artSize(logo, scale);
     const angle = pickAngle(rand);
     const box = stampBoxSize(w, h, angle, STAMP_PAD);
 

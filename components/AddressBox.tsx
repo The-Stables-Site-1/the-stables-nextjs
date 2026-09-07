@@ -33,6 +33,8 @@ type AddressBoxProps = {
   onBack?: () => void;
   logoHandoff?: PartnerLogoHandoff | null;
   homeLogoPlacement?: CardLogoPlacement | null;
+  /** Shorter card on narrow phones, so the header claims less vertical space. */
+  compactMobile?: boolean;
 };
 
 export function AddressBox({
@@ -43,6 +45,7 @@ export function AddressBox({
   onBack,
   logoHandoff = null,
   homeLogoPlacement = null,
+  compactMobile = false,
 }: AddressBoxProps) {
   const logoFrameRef = useRef<HTMLDivElement>(null);
   const logoRef = useRef<HTMLDivElement>(null);
@@ -121,12 +124,14 @@ export function AddressBox({
   }, [logoHandoff, partnerLogoSrc, showLogo]);
 
   const className = `relative block w-[335px] overflow-hidden border-[0.75px] border-ink max-[599px]:w-full ${
-    opaque || showLogo ? "bg-cream" : "bg-transparent"
-  }`;
-  const style = {
-    height: STAMP_BOX_H,
-    aspectRatio: STAMP_BOX_ASPECT_RATIO,
-  };
+    compactMobile ? "h-[191.43px] max-[599px]:h-[132px]" : ""
+  } ${opaque || showLogo ? "bg-cream" : "bg-transparent"}`;
+  const style = compactMobile
+    ? { aspectRatio: STAMP_BOX_ASPECT_RATIO }
+    : {
+        height: STAMP_BOX_H,
+        aspectRatio: STAMP_BOX_ASPECT_RATIO,
+      };
 
   const body = (
     <>
