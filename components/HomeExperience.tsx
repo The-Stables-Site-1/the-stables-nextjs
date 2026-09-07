@@ -57,6 +57,12 @@ const STAMP_GAP_MS = 600;
 /** Ceiling on accumulated impressions, so the page cannot grow forever. */
 const MAX_STAMPS = 16;
 
+/** Below this the content column goes full-bleed; matches the aside's own breakpoint. */
+const MOBILE_BREAKPOINT = 600;
+/** Target stamp art width as a share of a narrow viewport's width. */
+const MOBILE_STAMP_RATIO = 0.34;
+const MOBILE_STAMP_SCALE_MIN = 0.32;
+
 const randomSeed = () => (Math.random() * 0xffffffff) >>> 0;
 
 type StampInstance = {
@@ -102,6 +108,7 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
   );
   const [previewSlug, setPreviewSlug] = useState<string | null>(null);
   const [stamps, setStamps] = useState<StampInstance[]>([]);
+  const [infoOpen, setInfoOpen] = useState(true);
   const morphTimersRef = useRef<number[]>([]);
   const lockedRef = useRef(false);
   const idleTimerRef = useRef(0);
@@ -276,6 +283,14 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
     [],
   );
 
+  // Phones start with INFORMATION collapsed, so the panel claims less of the
+  // screen on arrival; the visitor can still open it with one tap.
+  useEffect(() => {
+    if (window.innerWidth >= MOBILE_BREAKPOINT) return;
+    const timer = window.setTimeout(() => setInfoOpen(false), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   // The intro card rises to wherever the address module actually sits, so the
   // hand-off is a swap rather than an approximation.
   useLayoutEffect(() => {
@@ -323,13 +338,29 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
     const column = asideRef.current;
     const pageBox = page?.getBoundingClientRect();
     const columnBox = column?.getBoundingClientRect();
+    // client dimensions reflect the page's normal-flow content without
+    // letting deliberately overhanging absolute stamps enlarge the next plan.
+    const width = page?.clientWidth ?? document.documentElement.clientWidth;
+    const height = page?.clientHeight ?? document.documentElement.clientHeight;
+
+    // Below the mobile breakpoint the column goes full-bleed and desktop-size
+    // logo art would swallow the screen, so shrink the die proportionally.
+    const scale =
+      width < MOBILE_BREAKPOINT
+        ? Math.min(
+            1,
+            Math.max(
+              MOBILE_STAMP_SCALE_MIN,
+              (width * MOBILE_STAMP_RATIO) / STAMP_ART_W,
+            ),
+          )
+        : 1;
 
     return {
-      // client dimensions reflect the page's normal-flow content without
-      // letting deliberately overhanging absolute stamps enlarge the next plan.
-      width: page?.clientWidth ?? document.documentElement.clientWidth,
-      height: page?.clientHeight ?? document.documentElement.clientHeight,
+      width,
+      height,
       seed: randomSeed(),
+      scale,
       avoid: pageBox && columnBox
         ? {
             x: columnBox.left - pageBox.left,
@@ -337,13 +368,11 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
             w: columnBox.width,
             // Idle stamps live on the z-0 layer, behind the opaque z-10 content
             // column, so anything under the column is hidden anyway. The keep-out
-            // rect only needs to cover roughly the collapsed column height; when
-            // the fit INFORMATION box grows the column taller, clamping the
-            // height stops that growth from shrinking (starving) the placeable
-            // area. Any stamp behind the grown box stays hidden, so this cannot
-            // print over the readable text. Cap ~= pre-fit column height
-            // (address + info + partners + contact).
-            h: Math.min(columnBox.height, 600),
+            // rect only needs to cover roughly the column's own height; clamping
+            // it to the viewport stops an off-screen tail (extra partners, an
+            // expanded INFORMATION box) from starving the placeable area below
+            // the fold, since a stamp printed there stays hidden either way.
+            h: Math.min(columnBox.height, window.innerHeight),
           }
         : null,
     };
@@ -425,14 +454,60 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
     pressNext();
   };
 
+  /**
+   * Reduced-motion visitors still see the coloured stamps, just settled in
+   * place all at once rather than pressed one by one over time.
+   */
+  const placeStaticField = () => {
+    const run = stampRunRef.current;
+
+    const attempt = () => {
+      if (stampRunRef.current !== run || lockedRef.current) return;
+      if (document.hidden) return;
+
+      if (!logosRef.current.length) {
+        stampTimerRef.current = window.setTimeout(attempt, 400);
+        return;
+      }
+
+      const surface = stampSurface();
+      let plan = planStampField({ logos: logosRef.current, ...surface });
+      if (!plan.length) {
+        plan = planStampField({
+          logos: logosRef.current,
+          ...surface,
+          avoid: null,
+        });
+      }
+      if (!plan.length) {
+        stampTimerRef.current = window.setTimeout(attempt, STAMP_GAP_MS);
+        return;
+      }
+
+      const capped = plan.slice(0, MAX_STAMPS);
+      stampCountRef.current = capped.length;
+      setStamps(
+        capped.map((placement) => ({
+          id: nextStampIdRef.current++,
+          placement,
+        })),
+      );
+    };
+
+    attempt();
+  };
+
   const armIdle = () => {
     stopIdle();
     if (lockedRef.current || activeSlugRef.current || document.hidden) return;
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
     const run = stampRunRef.current;
     idleTimerRef.current = window.setTimeout(() => {
       if (stampRunRef.current !== run || lockedRef.current) return;
-      runStampField();
+      if (reduceMotion) placeStaticField();
+      else runStampField();
     }, IDLE_MS);
   };
 
@@ -541,6 +616,8 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
         showTitle={reveal >= infoTitleAt}
         showBody={reveal >= infoBodyAt}
         opaque={ready || hasVisuals}
+        open={morphPartner ? true : infoOpen}
+        onOpenChange={morphPartner ? undefined : setInfoOpen}
         fit
       />
     </div>
@@ -607,14 +684,14 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
         className={`z-10 flex justify-center ${
           morphing
             ? "visual-viewport-fixed items-center"
-            : "relative min-h-screen items-start"
+            : "relative min-h-screen items-start max-[599px]:items-center"
         } ${
           phase === "loader" ? "opacity-0" : "opacity-100"
         }`}
       >
         <aside
           ref={asideRef}
-          className="flex w-full max-w-[375px] flex-col space-y-[-1px] px-5 py-5 max-[599px]:max-w-none"
+          className="flex w-full max-w-[375px] flex-col space-y-[-1px] px-5 py-5 max-[599px]:max-w-[87%] max-[599px]:px-4 max-[599px]:py-3"
           onPointerLeave={handleContainerLeave}
         >
           <div
@@ -635,6 +712,7 @@ export function HomeExperience({ partners }: HomeExperienceProps) {
               }
               logoHandoff={logoHandoff}
               homeLogoPlacement={homeLogoPlacement}
+              compactMobile
             />
           </div>
 
