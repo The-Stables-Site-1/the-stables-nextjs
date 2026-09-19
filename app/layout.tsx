@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Analytics } from "@vercel/analytics/next";
 import { PreloadMedia } from "@/components/PreloadMedia";
 import { StampClicks } from "@/components/StampClicks";
 import { site } from "@/lib/site";
@@ -120,6 +121,7 @@ export default function RootLayout({
         <StampClicks />
         <PreloadMedia />
         {children}
+        <Analytics />
       </body>
     </html>
   );
